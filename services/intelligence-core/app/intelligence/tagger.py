@@ -220,6 +220,7 @@ class ContentTagger:
         tension_val = emotions.get("TENSION", 0.0)
         suspense_val = emotions.get("SUSPENSE", 0.0)
 
+        wonder_val = emotions.get("WONDER", 0.0)
         # Baseline positive signals
         if joy_val > 0.35:
             c_score += joy_val * 0.3
@@ -230,6 +231,9 @@ class ContentTagger:
         if hope_val > 0.4:
             c_score += 0.15
             c_cues.append("Optimistic Outlook")
+        if wonder_val > 0.45 and darkness < 0.20:
+            c_score += 0.18
+            c_cues.append(f"Gentle Wonder ({int(wonder_val*100)}%)")
 
         bright_cnt = cls._count_keyword_matches(full_text, BRIGHTNESS_KEYWORDS)
         if bright_cnt > 0:
@@ -237,7 +241,9 @@ class ContentTagger:
             c_cues.append("Wholesome Narrative")
 
         if any(g in genres_lower for g in ["animation", "family", "comedy"]):
-            c_score += 0.15
+            c_score += 0.20
+        if any(g in genres_lower for g in ["family"]) and any(g in genres_lower for g in ["animation"]) and darkness < 0.15:
+            c_score += 0.12
 
         # Hard exclusions & steep dampeners:
         # High darkness, high intensity, thriller/horror/war, violence, or high fear/tension

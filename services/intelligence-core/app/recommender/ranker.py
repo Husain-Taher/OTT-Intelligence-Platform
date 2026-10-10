@@ -53,17 +53,45 @@ class MultiStageRanker:
             prof = item.profile
             genres_lower = [g.lower() for g in item.genres]
 
-            # Hard Genre Filter: If requested genres exist in sufficient quantity (>= top_n), hard filter!
-            if target_lower and genre_matches_available >= top_n:
+            # Hard Genre Filter: If requested genres are specified, only allow matching items
+            if target_lower:
                 if not any(g in target_lower for g in genres_lower):
                     continue
 
-            # Hard Mood Gate: drops candidates whose mood score is below 0.5
+            # Hard Mood Gate: strictly drops candidates whose mood score is below 0.6 (Phase 4 requirement)
             s_mood = 0.5
             if intent.mood:
                 s_mood = MultiStageRanker.compute_mood_score(item, intent.mood)
-                if s_mood < 0.5:
+                if s_mood < 0.6:
                     continue
+                # If comforting, strictly exclude dark/violent/high-intensity titles
+                if intent.mood.lower() == "comforting":
+                    from app.intelligence.tagger import ContentTagger
+                    dims = ContentTagger.compute_dimensions(item)
+                    if dims["darkness"] > 0.35 or dims["intensity"] > 0.50:
+                        continue
+
+            # Hard Runtime Gate
+            if intent.max_runtime and item.runtime and item.runtime > intent.max_runtime:
+                continue
+
+            # Hard Year Gate
+            if intent.year_min and item.release_year and item.release_year < intent.year_min:
+                continue
+            if intent.year_max and item.release_year and item.release_year > intent.year_max:
+                continue
+
+            # Hard Rating Gate
+            if intent.min_rating and item.vote_average and item.vote_average < intent.min_rating:
+                continue
+
+            # Hard Language Gate
+            if intent.language and item.original_language and item.original_language.lower() != intent.language.lower():
+                continue
+
+            # Hard Masterpiece Gate
+            if intent.masterpiece_only and not (item.vote_average and item.vote_average >= 8.0 and item.vote_count and item.vote_count >= 1000):
+                continue
 
             # 1. Base Personal Match from Taste Vector
             match_pct, breakdown, reasons, differences = TasteEngine.calculate_personal_match(taste, item)

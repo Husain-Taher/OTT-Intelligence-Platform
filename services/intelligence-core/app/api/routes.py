@@ -318,6 +318,11 @@ def find_my_watch(
     exclude_ids: Optional[List[str]] = Body(None, embed=True),
     genres: Optional[List[str]] = Body(None, embed=True),
     energy: Optional[str] = Body(None, embed=True),
+    year_min: Optional[int] = Body(None, embed=True),
+    year_max: Optional[int] = Body(None, embed=True),
+    min_rating: Optional[float] = Body(None, embed=True),
+    language: Optional[str] = Body(None, embed=True),
+    masterpiece_only: Optional[bool] = Body(False, embed=True),
     user: AuthUser = Depends(get_current_user)
 ):
     """
@@ -340,6 +345,16 @@ def find_my_watch(
         intent.target_genres = genres
     if energy:
         intent.energy = energy
+    if year_min is not None:
+        intent.year_min = year_min
+    if year_max is not None:
+        intent.year_max = year_max
+    if min_rating is not None:
+        intent.min_rating = min_rating
+    if language is not None:
+        intent.language = language
+    if masterpiece_only:
+        intent.masterpiece_only = masterpiece_only
     intent.novelty = max(0.0, min(1.0, novelty))
     taste = _taste_for_mood(user_id, canonical_mood or intent.mood)
 
@@ -357,9 +372,18 @@ def find_my_watch(
     )
 
     if not ranked:
-        # Fallback to general candidates
-        candidates = [(i, {"semantic_score": 0.5}) for i in all_items if i.content_id not in exclude_set]
+        # If hard constraints yielded no items when exclude_set was populated, allow repeating non-excluded items
+        candidates = generator.generate_candidates(all_items, taste, intent, seen_content_ids=set())
         ranked = MultiStageRanker.rank_and_diversify(candidates, taste, intent, top_n=5, shown_counts=shown_counts)
+
+    if not ranked:
+        # If still empty due to strict query, gracefully return empty results rather than violating hard gates
+        return {
+            "hero": None,
+            "runners_up": [],
+            "intent": intent,
+            "session_context": {"prompt": prompt, "mood": canonical_mood or intent.mood}
+        }
 
     # Record shown history for newly presented titles
     presented_ids = [r[0].content_id for r in ranked]

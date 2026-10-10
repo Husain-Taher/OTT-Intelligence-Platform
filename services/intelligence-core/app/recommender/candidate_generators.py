@@ -94,15 +94,58 @@ class CandidateGenerator:
                 if item.vote_average >= 7.8 and any(c in ["KR", "JP", "FR", "DE", "IN"] for c in item.origin_countries):
                     candidates_map[item.content_id] = (item, {"exploration_score": 0.85, "source": "exploration"})
 
-        # 4. Contextual Hard Constraints Filter (Runtime, Negative Tags)
+        # 4. Contextual Hard Constraints & Retrieval Gating (Phase 4)
+        from app.recommender.ranker import MultiStageRanker
         filtered_candidates = []
+
+        # If user explicitly requested target genres
+        target_genres_lower = [tg.lower() for tg in intent.target_genres] if intent.target_genres else []
+
         for cid, (item, scores) in candidates_map.items():
-            # Runtime constraint
-            if intent.max_runtime and item.runtime:
-                if item.runtime > (intent.max_runtime + 10):
+            # 1. Hard Mood Gating: mood score must be >= 0.6 (Phase 4 requirement)
+            if intent.mood:
+                m_score = MultiStageRanker.compute_mood_score(item, intent.mood)
+                if m_score < 0.6:
+                    continue
+                # If comforting, strictly exclude dark/violent/high-intensity titles
+                if intent.mood.lower() == "comforting":
+                    from app.intelligence.tagger import ContentTagger
+                    dims = ContentTagger.compute_dimensions(item)
+                    if dims["darkness"] > 0.35 or dims["intensity"] > 0.50:
+                        continue
+
+            # 2. Hard Genre Filter: if target_genres is provided, item must contain at least one requested genre
+            if target_genres_lower:
+                item_genres_lower = [g.lower() for g in item.genres]
+                if not any(tg in item_genres_lower for tg in target_genres_lower):
                     continue
 
-            # Avoid tags constraint
+            # 3. Hard Runtime Filter: runtime must not exceed max_runtime
+            if intent.max_runtime and item.runtime:
+                if item.runtime > intent.max_runtime:
+                    continue
+
+            # 4. Hard Year Range Gating
+            if intent.year_min and item.release_year and item.release_year < intent.year_min:
+                continue
+            if intent.year_max and item.release_year and item.release_year > intent.year_max:
+                continue
+
+            # 5. Hard Rating Threshold
+            if intent.min_rating and item.vote_average and item.vote_average < intent.min_rating:
+                continue
+
+            # 6. Hard Language Filter
+            if intent.language and item.original_language:
+                if item.original_language.lower() != intent.language.lower():
+                    continue
+
+            # 7. Hard Masterpiece Filter: rating >= 8.0 and substantial vote count
+            if intent.masterpiece_only:
+                if not (item.vote_average and item.vote_average >= 8.0 and item.vote_count and item.vote_count >= 1000):
+                    continue
+
+            # 8. Avoid tags constraint
             prof = item.profile
             if prof and "high_complexity" in intent.avoid_tags and prof.narrative_complexity > 0.75:
                 continue

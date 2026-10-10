@@ -156,6 +156,11 @@ class RecommendationIntent(BaseModel):
     preferred_regions: List[str] = Field(default_factory=list)
     target_genres: List[str] = Field(default_factory=list)
     query_text: Optional[str] = None
+    year_min: Optional[int] = None
+    year_max: Optional[int] = None
+    min_rating: Optional[float] = None
+    language: Optional[str] = None
+    masterpiece_only: Optional[bool] = False
 
 class RecommendationItem(BaseModel):
     content: CanonicalContent

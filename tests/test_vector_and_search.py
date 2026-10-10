@@ -1,4 +1,9 @@
+import os, sys
 import pytest
+
+ROOT = os.path.join(os.path.dirname(__file__), "..", "services", "intelligence-core")
+sys.path.insert(0, os.path.abspath(ROOT))
+
 from app.models.schemas import CanonicalContent, ContentType
 from app.intelligence.vector_index import DenseVectorIndex, VECTOR_DIM
 from app.intelligence.search_index import TypoTolerantSearchIndex, damerau_levenshtein_distance
