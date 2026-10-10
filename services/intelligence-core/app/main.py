@@ -6,16 +6,26 @@ _here = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_here, "..", "..", "..", ".env"))
 load_dotenv(os.path.join(_here, "..", ".env"))
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.auth import auth0
 from app.db.database import init_db
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    auth0.validate_config()
+    init_db()
+    yield
+
+
 app = FastAPI(
     title="OTT Intelligence Platform Core",
     description="Mood-aware entertainment discovery and personalization API (Auth0-protected).",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # The browser talks to the Next.js server (which proxies here), so CORS can stay tight.
@@ -25,17 +35,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(router)
 
-
-@app.on_event("startup")
-def startup_event():
-    auth0.validate_config()
-    init_db()
 
 
 @app.get("/")
