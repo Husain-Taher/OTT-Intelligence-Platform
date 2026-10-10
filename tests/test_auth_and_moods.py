@@ -125,3 +125,18 @@ def test_saving_in_a_mood_teaches_that_mood(client):
     # un-saving does not count as a positive signal
     client.post("/v1/user/watchlist/toggle", headers=h, json={"content_id": horror[0]["content_id"], "mood": "mystery"})
     assert client.get("/v1/user/watchlist", headers=h).json()["count"] == 3
+
+
+def test_mood_picks_differ_for_fresh_profile(client):
+    h = H(make_token("auth0|fresh_user"))
+    moods = ["comforting", "emotional", "reflective", "mystery", "exciting", "romance", "strange"]
+    top_picks = []
+    for mood in moods:
+        r = client.post("/v1/find-my-watch", headers=h, json={"mood": mood, "max_runtime": 180})
+        assert r.status_code == 200
+        hero = r.json().get("hero")
+        assert hero and hero["content"]["title"]
+        top_picks.append(hero["content"]["title"])
+    unique_picks = set(top_picks)
+    assert len(unique_picks) >= 5, f"Expected >= 5 unique picks, got {len(unique_picks)}: {top_picks}"
+

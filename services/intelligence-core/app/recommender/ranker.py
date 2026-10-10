@@ -36,17 +36,21 @@ class MultiStageRanker:
             if intent.mood:
                 m = intent.mood.lower()
                 if m in ["comforting", "wholesome", "light"]:
+                    is_violent = any(g in genres_lower for g in ["action", "horror", "war"]) or (prof and prof.emotions.get("FEAR", 0) > 0.3)
                     is_comforting = (
                         (prof and (prof.emotions.get("COMFORT", 0) > 0.4 or prof.emotions.get("JOY", 0) > 0.4)) or
                         any(g in genres_lower for g in ["comedy", "family", "animation"])
-                    )
-                    is_harsh = any(g in genres_lower for g in ["horror", "crime", "thriller"]) and not any(g in genres_lower for g in ["comedy", "family"])
+                    ) and not is_violent
+                    is_harsh = any(g in genres_lower for g in ["horror", "crime", "thriller", "action"]) and not any(g in genres_lower for g in ["family"])
                     if is_comforting:
-                        s_intent = 0.95
-                        mood_multiplier = 1.3
+                        s_intent = 0.98
+                        mood_multiplier = 1.35
                     elif is_harsh:
                         s_intent = 0.05
                         mood_multiplier = 0.1
+                    else:
+                        s_intent = 0.3
+                        mood_multiplier = 0.6
 
                 elif m in ["exciting", "adrenaline", "action"]:
                     is_exciting = any(g in genres_lower for g in ["action", "adventure"]) or (prof and prof.emotions.get("TENSION", 0) > 0.6)
@@ -97,17 +101,21 @@ class MultiStageRanker:
                         s_intent = 0.3
 
                 elif m in ["strange", "weird", "surprise"]:
-                    # Off the beaten path: non-US origin, or dense/uncanny storytelling
-                    is_strange = (
-                        any(c not in ("US", "GB") for c in item.origin_countries) or
-                        (prof and (prof.narrative_complexity > 0.7 or prof.mystery > 0.7)) or
-                        any(g in genres_lower for g in ["fantasy", "horror", "science fiction"])
+                    # Off the beaten path: high narrative complexity, eerie/speculative mystery, surreal
+                    is_surreal_or_complex = (prof and (prof.narrative_complexity > 0.7 or prof.mystery > 0.8))
+                    is_strange_genre = any(g in genres_lower for g in ["sci-fi & fantasy", "mystery", "fantasy", "horror"])
+                    is_strange = (is_surreal_or_complex and is_strange_genre) or (
+                        any(c not in ("US", "GB") for c in item.origin_countries) and (prof and prof.narrative_complexity > 0.6)
                     )
-                    if is_strange:
-                        s_intent = 0.9
-                        mood_multiplier = 1.25
+                    if is_strange and "action" not in genres_lower:
+                        s_intent = 0.98
+                        mood_multiplier = 1.35
+                    elif is_strange:
+                        s_intent = 0.85
+                        mood_multiplier = 1.15
                     else:
-                        s_intent = 0.35
+                        s_intent = 0.25
+                        mood_multiplier = 0.5
 
             # Target genres alignment boost or penalty
             if intent.target_genres:
