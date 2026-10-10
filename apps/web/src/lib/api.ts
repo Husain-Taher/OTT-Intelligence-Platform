@@ -105,3 +105,7 @@ export async function recordUserEvent(
     metadata: { ...(activeMood ? { mood: activeMood } : {}), ...metadata },
   });
 }
+
+export const submitPickFeedback = (mood: string, contentId: string, matched: number) =>
+  post<{ status: string; id: number }>(`/feedback`, { mood, content_id: contentId, matched });
+

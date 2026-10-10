@@ -140,3 +140,30 @@ def test_mood_picks_differ_for_fresh_profile(client):
     unique_picks = set(top_picks)
     assert len(unique_picks) >= 5, f"Expected >= 5 unique picks, got {len(unique_picks)}: {top_picks}"
 
+
+def test_pick_feedback_and_csv_export(client, monkeypatch):
+    h = H(make_token("auth0|eval_user"))
+    # 1. Submit feedback
+    r = client.post("/v1/feedback", headers=h, json={
+        "mood": "mystery",
+        "content_id": "test_cid_123",
+        "matched": 1
+    })
+    assert r.status_code == 200
+    assert r.json()["status"] == "success"
+
+    # 2. Check export permissions
+    # When ADMIN_SUB is set, non-admin gets 403
+    monkeypatch.setenv("ADMIN_SUB", "auth0|the_admin")
+    r_non_admin = client.get("/v1/admin/export.csv", headers=h)
+    assert r_non_admin.status_code == 403
+
+    # Admin gets 200 and CSV with our feedback row
+    h_admin = H(make_token("auth0|the_admin"))
+    r_admin = client.get("/v1/admin/export.csv", headers=h_admin)
+    assert r_admin.status_code == 200
+    assert "text/csv" in r_admin.headers["content-type"]
+    assert "auth0|eval_user" in r_admin.text
+    assert "mystery" in r_admin.text
+
+

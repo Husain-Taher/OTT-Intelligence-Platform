@@ -163,3 +163,9 @@ class RecommendationItem(BaseModel):
     reasons: List[str]
     differences_from_usual: List[str] = Field(default_factory=list)
     contrasting_note: Optional[str] = None
+
+class FeedbackRequest(BaseModel):
+    mood: str
+    content_id: str
+    matched: int  # 1 for Yes, 0 for No
+

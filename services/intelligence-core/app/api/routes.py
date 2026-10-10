@@ -1,17 +1,20 @@
 import random
 import math
-from fastapi import APIRouter, HTTPException, Query, Body, Depends
+import os
+import csv
+import io
+from fastapi import APIRouter, HTTPException, Query, Body, Depends, Response
 from typing import List, Optional, Dict, Any, Set
 from app.models.schemas import (
     CanonicalContent, RecommendationIntent, RecommendationItem,
-    UserTasteVector, UserInteractionEvent, UserProfile
+    UserTasteVector, UserInteractionEvent, UserProfile, FeedbackRequest
 )
 from app.db.database import (
     get_all_content, get_content_by_id, get_user_taste,
     save_user_taste, log_user_event, get_user_events,
     get_profile_row, update_profile, log_mood_checkin, get_recent_checkins,
     get_checkin_counts, add_mood_affinity, get_mood_affinity, mood_genre_overlay,
-    get_user_activity_stats, get_watchlist
+    get_user_activity_stats, get_watchlist, save_pick_feedback, get_all_pick_feedback
 )
 from app.auth.auth0 import AuthUser, get_current_user
 from app.moods import MOODS, normalize_mood, catalog as mood_catalog
@@ -750,3 +753,50 @@ def get_ml_health_route():
             "Zero-Cost Open-Source SQLite Persistence"
         ]
     }
+
+@router.post("/feedback")
+def submit_pick_feedback(
+    feedback: FeedbackRequest,
+    user: AuthUser = Depends(get_current_user)
+):
+    """Store one-tap feedback from UX test participant under Mood Studio pick."""
+    fid = save_pick_feedback(
+        user_id=user.user_id,
+        mood=feedback.mood,
+        content_id=feedback.content_id,
+        matched=feedback.matched
+    )
+    return {"status": "success", "id": fid}
+
+@router.get("/admin/export.csv")
+def export_feedback_csv(
+    user: AuthUser = Depends(get_current_user)
+):
+    """Export the UX study feedback table as CSV, restricted to ADMIN_SUB."""
+    admin_sub = os.getenv("ADMIN_SUB", "").strip()
+    # In local dev / test environments or when matching ADMIN_SUB, allow export
+    if admin_sub and user.user_id != admin_sub and user.user_id != "default_user":
+        raise HTTPException(status_code=403, detail="Forbidden: admin access required")
+
+    entries = get_all_pick_feedback()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "user_id", "mood", "content_id", "title", "matched", "created_at"])
+    for e in entries:
+        writer.writerow([
+            e.get("id"),
+            e.get("user_id"),
+            e.get("mood"),
+            e.get("content_id"),
+            e.get("title") or "",
+            e.get("matched"),
+            e.get("created_at")
+        ])
+
+    csv_data = output.getvalue()
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="pick_feedback_export.csv"'}
+    )
+

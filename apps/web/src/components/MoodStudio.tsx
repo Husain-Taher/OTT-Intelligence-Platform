@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Bookmark, BookmarkCheck, Clapperboard, Heart, RefreshCw, Info } from "lucide-react";
+import { Bookmark, BookmarkCheck, Clapperboard, Heart, RefreshCw, Info, ThumbsUp, ThumbsDown } from "lucide-react";
 import MoodDimmer from "./MoodDimmer";
 import MovieCard from "./MovieCard";
 import { useMood } from "@/context/MoodContext";
 import { useMe } from "@/context/MeContext";
-import { executeFindMyWatch, fetchMoodCatalog, recordUserEvent, toggleWatchlist } from "@/lib/api";
+import { executeFindMyWatch, fetchMoodCatalog, recordUserEvent, toggleWatchlist, submitPickFeedback } from "@/lib/api";
 import { CanonicalContent, FindMyWatchResponse, MoodCatalogEntry } from "@/types";
 
 type Phase = "setup" | "rolling" | "shown";
@@ -46,6 +46,7 @@ export default function MoodStudio({ onSelectTitle }: { onSelectTitle: (c: Canon
   const [excluded, setExcluded] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -64,6 +65,7 @@ export default function MoodStudio({ onSelectTitle }: { onSelectTitle: (c: Canon
     setPhase((p) => (p === "rolling" ? p : "setup"));
     setExcluded([]);
     setResult(null);
+    setFeedbackGiven(null);
   }, [theme?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const suggested = useMemo(() => catalog?.moods.find((m) => m.id === mood)?.genres ?? [], [catalog, mood]);
@@ -92,6 +94,7 @@ export default function MoodStudio({ onSelectTitle }: { onSelectTitle: (c: Canon
     setExcluded(ex);
     setSaved(false);
     setLiked(false);
+    setFeedbackGiven(null);
     setPhase("shown");
     if (!another) refresh(); // the check-in now appears on the profile
     requestAnimationFrame(() => stageRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }));
@@ -115,6 +118,13 @@ export default function MoodStudio({ onSelectTitle }: { onSelectTitle: (c: Canon
     await recordUserEvent(hero.content.content_id, "LIKE");
     flash(`Noted. ${hero.content.genres.slice(0, 2).join(" and ")} counts toward your ${theme.label.toLowerCase()} nights.`);
     refresh();
+  };
+
+  const onFeedback = async (matched: number) => {
+    if (!hero || !mood || feedbackGiven !== null) return;
+    setFeedbackGiven(matched);
+    await submitPickFeedback(mood, hero.content.content_id, matched);
+    flash(matched === 1 ? "Thank you! Glad this fit your mood." : "Thank you! We'll calibrate for better fits.");
   };
 
   return (
@@ -340,6 +350,39 @@ export default function MoodStudio({ onSelectTitle }: { onSelectTitle: (c: Canon
                 <button onClick={() => setPhase("setup")} className="ml-auto text-sm text-gel-300 underline-offset-4 hover:underline">
                   Adjust the mood
                 </button>
+              </div>
+
+              {/* Study feedback question */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-dashed border-ivory/10 bg-surface-elevated/40 px-6 py-3 sm:px-10">
+                <span className="text-xs text-ivory/70">
+                  Did this match your {theme.label.toLowerCase()} mood?
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => onFeedback(1)}
+                    disabled={feedbackGiven !== null}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition border ${
+                      feedbackGiven === 1
+                        ? "bg-gel-500/20 border-gel-400 text-gel-300 font-semibold"
+                        : "border-ivory/15 text-ivory/70 hover:border-gel-400 hover:text-ivory disabled:opacity-40"
+                    }`}
+                  >
+                    <ThumbsUp className="h-3.5 w-3.5" />
+                    <span>Yes</span>
+                  </button>
+                  <button
+                    onClick={() => onFeedback(0)}
+                    disabled={feedbackGiven !== null}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition border ${
+                      feedbackGiven === 0
+                        ? "bg-rose-500/20 border-rose-400 text-rose-300 font-semibold"
+                        : "border-ivory/15 text-ivory/70 hover:border-rose-400 hover:text-ivory disabled:opacity-40"
+                    }`}
+                  >
+                    <ThumbsDown className="h-3.5 w-3.5" />
+                    <span>No</span>
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -170,6 +170,19 @@ def init_db():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_events_user ON user_events(user_id, id DESC);")
 
+    # One-tap feedback for UX study: Did this match your mood?
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS pick_feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        mood TEXT NOT NULL,
+        content_id TEXT NOT NULL,
+        matched INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pick_feedback_user ON pick_feedback(user_id, id DESC);")
+
     conn.commit()
     conn.close()
 
@@ -625,3 +638,32 @@ def get_user_activity_stats(user_id: str) -> Dict[str, Any]:
     conn.close()
     minutes = sum(r[1] or 0 for r in rows)
     return {"titles_completed": len(rows), "hours_watched": round(minutes / 60.0, 1), "likes": likes}
+
+
+def save_pick_feedback(user_id: str, mood: str, content_id: str, matched: int) -> int:
+    """Store one-tap feedback from UX test participant."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO pick_feedback (user_id, mood, content_id, matched)
+        VALUES (?, ?, ?, ?)
+    """, (user_id, mood, content_id, 1 if matched else 0))
+    feedback_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return feedback_id
+
+
+def get_all_pick_feedback() -> List[Dict[str, Any]]:
+    """Retrieve all feedback entries for UX evaluation export."""
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT f.id, f.user_id, f.mood, f.content_id, c.title, f.matched, f.created_at
+        FROM pick_feedback f
+        LEFT JOIN canonical_content c ON c.content_id = f.content_id
+        ORDER BY f.id ASC
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
