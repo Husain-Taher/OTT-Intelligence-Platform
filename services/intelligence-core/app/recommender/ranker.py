@@ -113,53 +113,67 @@ class MultiStageRanker:
             # 3. Semantic Score from NLP
             s_semantic = gen_scores.get("semantic_score", 0.5)
 
-            # 4. Quality Signal (Normalized vote average & count)
-            s_quality = min(1.0, max(0.0, (item.vote_average - 6.0) / 4.0)) if item.vote_average else 0.75
+            # 4. Quality Signal (Normalized IMDb / TMDB vote average & vote volume)
+            s_quality = min(1.0, max(0.0, (item.vote_average - 5.5) / 4.5)) if item.vote_average else 0.70
 
-            # 5. Novelty / Exploration
+            # 5. Collaborative / Social Signal ("People like you liked this")
+            from app.db.database import get_item_collaborative_affinity
+            s_collab = get_item_collaborative_affinity(item.content_id)
+
+            # 6. Novelty / Exploration
             is_foreign = any(c not in ["US", "GB"] for c in item.origin_countries)
-            novelty_weight = intent.novelty if intent.novelty is not None else 0.5
-            s_novelty = 0.85 if (is_foreign and novelty_weight > 0.5) else 0.4
+            novelty_param = intent.novelty if intent.novelty is not None else 0.5
+            s_novelty = (0.85 if is_foreign else 0.40) * (0.6 + 0.8 * novelty_param)
+            s_novelty = min(1.0, max(0.1, s_novelty))
 
-            # 6. Runtime Penalty
+            # 7. Runtime Penalty
             runtime_penalty = 0.0
             if intent.max_runtime and item.runtime:
                 if item.runtime > intent.max_runtime:
                     over = item.runtime - intent.max_runtime
                     runtime_penalty = min(0.6, (over / 25.0) * 0.25)
 
-            # 7. Recent Session Shown Penalty (Phase 0 requirement 2)
+            # 8. Recent Session Shown Penalty (Phase 0 requirement 2)
             times_shown = shown_counts.get(item.content_id, 0)
             shown_penalty = times_shown * 0.16
 
-            # Synthesize Final Score
+            # Synthesize Final Score per Phase 5 Specification:
+            # Baseline targets: Mood (0.35), Taste (0.25), Quality (0.15), Collaborative (0.15), Novelty (0.10)
             if intent.query_text:
-                w_mood = 0.20
-                w_taste = 0.10
-                w_intent = 0.25
-                w_semantic = 0.30
-                w_quality = 0.10
+                # Query-driven discovery: blend semantic NLP with mood and taste
+                w_mood = 0.25
+                w_taste = 0.15
+                w_quality = 0.15
+                w_collab = 0.10
                 w_novelty = 0.05
+                w_semantic = 0.30
+
+                raw_score = (
+                    (s_mood * w_mood) +
+                    (s_taste * w_taste) +
+                    (s_quality * w_quality) +
+                    (s_collab * w_collab) +
+                    (s_novelty * w_novelty) +
+                    (s_semantic * w_semantic)
+                ) - runtime_penalty - shown_penalty
             else:
                 w_mood = 0.35
-                w_taste = 0.20
-                w_intent = 0.15
-                w_semantic = 0.15
-                w_quality = 0.10
-                w_novelty = novelty_weight * 0.05
+                w_taste = 0.25
+                w_quality = 0.15
+                w_collab = 0.15
+                w_novelty = 0.10
 
-            raw_score = (
-                (s_mood * w_mood) +
-                (s_taste * w_taste) +
-                (s_intent * w_intent) +
-                (s_semantic * w_semantic) +
-                (s_quality * w_quality) +
-                (s_novelty * w_novelty)
-            ) - runtime_penalty - shown_penalty
+                raw_score = (
+                    (s_mood * w_mood) +
+                    (s_taste * w_taste) +
+                    (s_quality * w_quality) +
+                    (s_collab * w_collab) +
+                    (s_novelty * w_novelty)
+                ) - runtime_penalty - shown_penalty
 
             final_score = max(0.01, min(1.0, raw_score))
 
-            # Calibrate personal match percentage based on mood alignment
+            # Calibrate personal match percentage based on mood alignment and taste
             adjusted_match_pct = int(min(99, max(30, (match_pct * 0.4 + s_mood * 60) - (runtime_penalty * 20))))
 
             # Formulate query-aware reasons if semantic or genre match

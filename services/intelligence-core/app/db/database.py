@@ -839,3 +839,39 @@ def get_all_embeddings() -> Dict[str, List[float]]:
     return result
 
 
+def get_item_collaborative_affinity(content_id: str) -> float:
+    """
+    Computes collaborative/social signal: ratio of positive peer actions (LIKE, WATCH_COMPLETE, SAVE, REWATCH)
+    over total interactions for this content_id across user_events and pick_feedback.
+    Defaults to 0.75 if insufficient interactions exist.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    # Check pick_feedback matches
+    fb_row = cur.execute("""
+        SELECT COUNT(*), SUM(matched) FROM pick_feedback WHERE content_id = ?
+    """, (content_id,)).fetchone()
+    
+    # Check positive interaction events
+    evt_pos = cur.execute("""
+        SELECT COUNT(*) FROM user_events
+        WHERE content_id = ? AND event_type IN ('LIKE', 'WATCH_COMPLETE', 'SAVE', 'REWATCH', 'SHARE')
+    """, (content_id,)).fetchone()[0]
+
+    evt_neg = cur.execute("""
+        SELECT COUNT(*) FROM user_events
+        WHERE content_id = ? AND event_type IN ('DISLIKE', 'ABANDON')
+    """, (content_id,)).fetchone()[0]
+
+    conn.close()
+
+    total_signals = (fb_row[0] or 0) + evt_pos + evt_neg
+    if total_signals == 0:
+        return 0.70  # Prior for cold start items
+
+    pos_signals = (fb_row[1] or 0) + evt_pos
+    ratio = pos_signals / float(total_signals)
+    return round(min(1.0, max(0.1, ratio)), 3)
+
+
+
