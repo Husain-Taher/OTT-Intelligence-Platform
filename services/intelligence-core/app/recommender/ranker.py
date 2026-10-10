@@ -7,82 +7,24 @@ class MultiStageRanker:
     def compute_mood_score(item: CanonicalContent, mood: str) -> float:
         """
         Evaluates content alignment for a specific mood from 0.0 to 1.0 using emotions,
-        genre semantics, keywords, and narrative aspects.
+        keywords, overview semantics, continuous darkness/intensity, and narrative aspects.
         """
-        prof = item.profile
-        emotions = prof.emotions if prof else {}
-        genres = [g.lower() for g in item.genres]
-        keywords = [k.lower() for k in (item.keywords or [])]
+        from app.intelligence.tagger import ContentTagger
+        tag_res = ContentTagger.tag_content(item)
         m = mood.lower()
 
-        if m in ["comforting", "wholesome", "light", "cozy"]:
-            # Hard exclusion: violence, horror, extreme fear or tension
-            if any(g in genres for g in ["horror", "war"]) or emotions.get("FEAR", 0) > 0.35 or emotions.get("TENSION", 0) > 0.65:
-                return 0.0
-            score = 0.2
-            if any(g in genres for g in ["animation", "family", "comedy"]):
-                score += 0.45
-            if emotions.get("COMFORT", 0) > 0.35:
-                score += 0.3
-            if emotions.get("JOY", 0) > 0.35:
-                score += 0.2
-            return min(1.0, score)
+        alias_map = {
+            "wholesome": "comforting", "light": "comforting", "cozy": "comforting",
+            "adrenaline": "exciting", "action": "exciting",
+            "poignant": "emotional", "feel something": "emotional",
+            "intellectual": "reflective", "philosophical": "reflective",
+            "whodunit": "mystery", "puzzle": "mystery",
+            "romantic": "romance", "love": "romance",
+            "weird": "strange", "surprise": "strange"
+        }
+        canonical = alias_map.get(m, m)
+        return tag_res.mood_scores.get(canonical, 0.5)
 
-        elif m in ["exciting", "adrenaline", "action"]:
-            score = 0.2
-            if any(g in genres for g in ["action", "adventure"]):
-                score += 0.45
-            if emotions.get("TENSION", 0) > 0.5 or emotions.get("SUSPENSE", 0) > 0.5:
-                score += 0.3
-            return min(1.0, score)
-
-        elif m in ["emotional", "poignant", "feel something"]:
-            score = 0.2
-            if any(g in genres for g in ["drama", "romance"]):
-                score += 0.4
-            if emotions.get("REFLECTION", 0) > 0.5 or emotions.get("SADNESS", 0) > 0.4 or emotions.get("GRIEF", 0) > 0.4:
-                score += 0.3
-            return min(1.0, score)
-
-        elif m in ["reflective", "intellectual", "philosophical"]:
-            score = 0.2
-            if prof and prof.philosophical_depth > 0.6:
-                score += 0.4
-            if any(g in genres for g in ["science fiction", "drama"]):
-                score += 0.3
-            if emotions.get("REFLECTION", 0) > 0.5:
-                score += 0.2
-            return min(1.0, score)
-
-        elif m in ["mystery", "whodunit", "puzzle"]:
-            score = 0.2
-            if "mystery" in genres:
-                score += 0.5
-            elif any(g in genres for g in ["crime", "thriller"]):
-                score += 0.3
-            if prof and prof.mystery > 0.6:
-                score += 0.35
-            return min(1.0, score)
-
-        elif m in ["romance", "romantic", "love"]:
-            score = 0.1
-            if "romance" in genres:
-                score += 0.55
-            if emotions.get("ROMANCE", 0) > 0.4:
-                score += 0.4
-            return min(1.0, score)
-
-        elif m in ["strange", "weird", "surprise"]:
-            score = 0.2
-            if any(g in genres for g in ["fantasy", "horror", "sci-fi & fantasy"]):
-                score += 0.35
-            if any(k in keywords for k in ["supernatural", "surreal", "dystopia", "zombie", "time travel"]):
-                score += 0.35
-            if prof and prof.narrative_complexity > 0.65:
-                score += 0.25
-            return min(1.0, score)
-
-        return 0.5
 
     @staticmethod
     def rank_and_diversify(
