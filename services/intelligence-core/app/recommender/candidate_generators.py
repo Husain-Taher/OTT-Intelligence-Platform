@@ -41,6 +41,15 @@ class CandidateGenerator:
                 continue
             candidates_map[item.content_id] = (item, {"semantic_score": sim_score, "source": "semantic"})
 
+        # Typo-tolerant keyword / title / person retrieval
+        if query and hasattr(self.semantic, "search_keyword"):
+            keyword_hits = self.semantic.search_keyword(query, top_k=15)
+            for hit in keyword_hits:
+                item = hit["content"]
+                if item.content_id not in seen_content_ids and item.content_id not in candidates_map:
+                    candidates_map[item.content_id] = (item, {"semantic_score": hit["score"], "source": hit["match_reason"]})
+
+
         # Also retrieve directly if item matches target_genres or keyword
         if intent.target_genres:
             for item in all_items:

@@ -139,9 +139,14 @@ def init_db():
     CREATE TABLE IF NOT EXISTS content_embeddings (
         content_id TEXT PRIMARY KEY,
         embedding_vector TEXT,
-        text_corpus TEXT
+        text_corpus TEXT,
+        model_name TEXT
     );
     """)
+    try:
+        cursor.execute("ALTER TABLE content_embeddings ADD COLUMN model_name TEXT;")
+    except Exception:
+        pass
 
 
     # Auth0-backed profiles (user_id = Auth0 `sub`)
@@ -789,4 +794,48 @@ def backfill_mood_scores() -> int:
         scores = {m: round(MultiStageRanker.compute_mood_score(item, m), 3) for m in ["comforting", "emotional", "reflective", "mystery", "exciting", "romance", "strange"]}
         save_mood_scores(item.content_id, scores)
     return len(unscored)
+
+
+def save_embedding(content_id: str, vector: List[float], corpus: str = "", model_name: str = "BAAI/bge-small-en-v1.5") -> None:
+    """Stores dense embedding vector for a title in content_embeddings."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT OR REPLACE INTO content_embeddings (content_id, embedding_vector, text_corpus, model_name)
+        VALUES (?, ?, ?, ?)
+    """, (content_id, json.dumps(vector), corpus, model_name))
+    conn.commit()
+    conn.close()
+
+
+def get_embedding(content_id: str) -> Optional[List[float]]:
+    """Retrieves dense embedding vector for a content item."""
+    conn = get_connection()
+    cur = conn.cursor()
+    row = cur.execute("""
+        SELECT embedding_vector FROM content_embeddings WHERE content_id = ?
+    """, (content_id,)).fetchone()
+    conn.close()
+    if row and row[0]:
+        return json.loads(row[0])
+    return None
+
+
+def get_all_embeddings() -> Dict[str, List[float]]:
+    """Retrieves all stored embedding vectors as a map of content_id -> vector."""
+    conn = get_connection()
+    cur = conn.cursor()
+    rows = cur.execute("""
+        SELECT content_id, embedding_vector FROM content_embeddings
+    """).fetchall()
+    conn.close()
+    result = {}
+    for cid, vec_json in rows:
+        if vec_json:
+            try:
+                result[cid] = json.loads(vec_json)
+            except Exception:
+                pass
+    return result
+
 

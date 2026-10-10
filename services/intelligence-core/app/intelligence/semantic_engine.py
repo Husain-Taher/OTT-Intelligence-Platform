@@ -1,56 +1,25 @@
 import re
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 from app.models.schemas import CanonicalContent, RecommendationIntent, EmotionType
+from app.intelligence.vector_index import DenseVectorIndex
+from app.intelligence.search_index import TypoTolerantSearchIndex
+
 
 class SemanticEngine:
     def __init__(self):
-        self.vectorizer = TfidfVectorizer(
-            stop_words='english',
-            ngram_range=(1, 2),
-            max_features=5000
-        )
+        self.vector_index = DenseVectorIndex()
+        self.search_index = TypoTolerantSearchIndex()
         self.content_ids: List[str] = []
-        self.tfidf_matrix = None
         self.is_fitted = False
 
     def build_index(self, items: List[CanonicalContent]):
         if not items:
             return
-        
-        self.content_ids = [item.content_id for item in items]
-        documents = []
-        for item in items:
-            # Rich document incorporating title, overview, genres, keywords, directors, cast, and narrative attributes
-            prof = item.profile
-            doc_parts = [
-                item.title,
-                item.original_title or "",
-                item.overview,
-                " ".join(item.genres),
-                " ".join(item.keywords),
-                " ".join(item.directors),
-                " ".join(item.cast[:4]),
-                f"language_{item.original_language}",
-                " ".join(f"country_{c}" for c in item.origin_countries),
-            ]
-            if prof:
-                # Add dominant emotions and pacing tags
-                top_emotions = [k for k, v in prof.emotions.items() if v >= 0.4]
-                doc_parts.append(" ".join(top_emotions))
-                pacing_tag = max(prof.pacing.items(), key=lambda x: x[1])[0]
-                doc_parts.append(f"pacing_{pacing_tag}")
-                if prof.narrative_complexity >= 0.7:
-                    doc_parts.append("complex_narrative non_linear")
-                if prof.mystery >= 0.7:
-                    doc_parts.append("deep_mystery whodunit")
-                if prof.philosophical_depth >= 0.7:
-                    doc_parts.append("philosophical existential")
-            documents.append(" ".join(doc_parts))
 
-        self.tfidf_matrix = self.vectorizer.fit_transform(documents)
+        self.content_ids = [item.content_id for item in items]
+        self.vector_index.index_items(items)
+        self.search_index.build_index(items)
         self.is_fitted = True
 
     def parse_natural_intent(self, query: str) -> RecommendationIntent:
@@ -110,11 +79,11 @@ class SemanticEngine:
         # Explicit genre checks
         if "thriller" in q_low and "Thriller" not in intent.target_genres:
             intent.target_genres.append("Thriller")
-        if "sci-fi" in q_low or "science fiction" in q_low and "Science Fiction" not in intent.target_genres:
+        if ("sci-fi" in q_low or "science fiction" in q_low) and "Science Fiction" not in intent.target_genres:
             intent.target_genres.append("Science Fiction")
         if "horror" in q_low and "Horror" not in intent.target_genres:
             intent.target_genres.append("Horror")
-        if "animation" in q_low or "anime" in q_low and "Animation" not in intent.target_genres:
+        if ("animation" in q_low or "anime" in q_low) and "Animation" not in intent.target_genres:
             intent.target_genres.append("Animation")
         if "documentary" in q_low and "Documentary" not in intent.target_genres:
             intent.target_genres.append("Documentary")
@@ -141,21 +110,18 @@ class SemanticEngine:
         items_map: Dict[str, CanonicalContent],
         top_k: int = 20
     ) -> List[Tuple[CanonicalContent, float]]:
-        if not self.is_fitted or self.tfidf_matrix is None:
+        """
+        Meaning-aware dense vector search using BGE-small embeddings.
+        Replaces legacy TF-IDF word overlap model.
+        """
+        if not self.is_fitted:
             return []
 
-        query_vec = self.vectorizer.transform([query])
-        sims = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
-
-        # Rank indices
-        top_indices = np.argsort(-sims)[:top_k]
+        hits = self.vector_index.search(query, top_k=top_k)
         results = []
-        for idx in top_indices:
-            score = float(sims[idx])
-            if score > 0.01:
-                cid = self.content_ids[idx]
-                if cid in items_map:
-                    results.append((items_map[cid], round(score, 3)))
+        for cid, score in hits:
+            if cid in items_map and score > 0.05:
+                results.append((items_map[cid], round(score, 3)))
         return results
 
     def find_similar_to_title(
@@ -164,19 +130,40 @@ class SemanticEngine:
         items_map: Dict[str, CanonicalContent],
         top_k: int = 10
     ) -> List[Tuple[CanonicalContent, float]]:
-        if not self.is_fitted or source_id not in self.content_ids:
+        """
+        Finds conceptually similar films in the 384-dimensional semantic space.
+        """
+        if not self.is_fitted:
             return []
 
-        idx = self.content_ids.index(source_id)
-        source_vec = self.tfidf_matrix[idx]
-        sims = cosine_similarity(source_vec, self.tfidf_matrix).flatten()
-
-        top_indices = np.argsort(-sims)
+        hits = self.vector_index.find_similar(source_id, top_k=top_k)
         results = []
-        for i in top_indices:
-            cid = self.content_ids[i]
-            if cid != source_id and cid in items_map:
-                results.append((items_map[cid], round(float(sims[i]), 3)))
-                if len(results) >= top_k:
-                    break
+        for cid, score in hits:
+            if cid in items_map:
+                results.append((items_map[cid], round(score, 3)))
         return results
+
+    def search_keyword(
+        self,
+        query: str,
+        genres: Optional[List[str]] = None,
+        year_min: Optional[int] = None,
+        year_max: Optional[int] = None,
+        min_rating: Optional[float] = None,
+        language: Optional[str] = None,
+        max_runtime: Optional[int] = None,
+        top_k: int = 15
+    ) -> List[Dict[str, Any]]:
+        """
+        Typo-tolerant fuzzy keyword search across title, directors, cast, and keywords.
+        """
+        return self.search_index.search(
+            query=query,
+            genres=genres,
+            year_min=year_min,
+            year_max=year_max,
+            min_rating=min_rating,
+            language=language,
+            max_runtime=max_runtime,
+            top_k=top_k
+        )
