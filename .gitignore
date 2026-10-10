@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 venv/
 *.db
+!services/intelligence-core/data/ott_intelligence.db
 *.sqlite3
 .cache/
 .DS_Store
