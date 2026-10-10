@@ -44,7 +44,7 @@ function Theater() {
       <main className="relative z-10 mx-auto w-full max-w-7xl flex-1 px-4 pb-32 pt-6 sm:px-6 md:pb-16 md:pt-10 lg:px-8">
         {tab === "discover" && <DiscoveryHomeView onSelectTitle={select} onOpenStudio={() => go("studio")} />}
         {tab === "studio" && <MoodStudio onSelectTitle={select} />}
-        {tab === "taste-universe" && <TasteUniverseView />}
+        {tab === "taste-universe" && <TasteUniverseView onSelectTitle={select} />}
         {tab === "search" && <NaturalSearchView onSelectTitle={select} />}
         {tab === "profile" && <ProfileView onSelectTitle={select} onTryMood={() => go("studio")} />}
       </main>

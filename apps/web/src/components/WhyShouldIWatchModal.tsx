@@ -271,6 +271,61 @@ export default function WhyShouldIWatchModal({ content, onClose, onEventLogged, 
             </div>
           )}
 
+          {/* Section: Leading Cast & Characters with Photos */}
+          {((content.cast_detail && content.cast_detail.length > 0) || (content.directors && content.directors.length > 0)) && (
+            <div className="space-y-3">
+              <h4 className="text-xs font-semibold tracking-wider text-slate-400 uppercase">
+                Visionary Creators & Leading Cast
+              </h4>
+              
+              {/* Directors row */}
+              {content.directors && content.directors.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-[11px] text-indigo-300 font-semibold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                    Directed by:
+                  </span>
+                  {content.directors.map((d) => (
+                    <span key={d} className="text-xs font-medium text-slate-200">
+                      {d}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Cast headshots grid */}
+              {content.cast_detail && content.cast_detail.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {content.cast_detail.slice(0, 4).map((actor, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-2"
+                    >
+                      <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-slate-800 border border-white/10">
+                        {actor.profile_path ? (
+                          <img
+                            src={actor.profile_path}
+                            alt={actor.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-500 font-bold">
+                            {actor.name.charAt(0)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="overflow-hidden">
+                        <div className="text-xs font-semibold text-slate-200 truncate">{actor.name}</div>
+                        {actor.character && (
+                          <div className="text-[10px] text-slate-400 truncate">as {actor.character}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Available Streaming Platforms */}
           <div className="flex items-center justify-between border-t border-white/[0.08] pt-4">
             <div className="flex items-center gap-2">

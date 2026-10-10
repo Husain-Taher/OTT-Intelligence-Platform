@@ -26,16 +26,18 @@ class CandidateGenerator:
 
         # 1. Semantic & Intent Retrieval
         query = intent.query_text or ""
-        search_terms = [query]
-        if intent.mood:
+        search_terms = []
+        if query:
+            search_terms.append(query)
+        elif intent.mood:
             search_terms.append(f"{intent.mood} atmospheric")
-        if intent.target_genres:
+        if intent.target_genres and not query:
             search_terms.append(" ".join(intent.target_genres))
-        if intent.preferred_regions:
+        if intent.preferred_regions and not query:
             search_terms.append(" ".join(intent.preferred_regions))
 
         full_search_str = " ".join(search_terms).strip()
-        semantic_hits = self.semantic.search_semantic(full_search_str, items_by_id, top_k=35) if full_search_str else []
+        semantic_hits = self.semantic.search_semantic(full_search_str, items_by_id, top_k=60) if full_search_str else []
         for item, sim_score in semantic_hits:
             if item.content_id in seen_content_ids:
                 continue
@@ -66,7 +68,8 @@ class CandidateGenerator:
                     continue
                 m_score = MultiStageRanker.compute_mood_score(item, intent.mood)
                 if m_score >= 0.5:
-                    candidates_map[item.content_id] = (item, {"semantic_score": m_score * 0.7, "source": "mood_match"})
+                    s_score = 0.2 if intent.query_text else (m_score * 0.7)
+                    candidates_map[item.content_id] = (item, {"semantic_score": s_score, "source": "mood_match"})
 
 
         # 2. Taste-Based Retrieval (Only backfill if no explicit query text or as soft candidate addition)

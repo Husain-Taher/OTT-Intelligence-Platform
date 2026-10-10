@@ -69,6 +69,11 @@ export interface CanonicalContent {
   trailer_key?: string | null;
   providers: StreamingProvider[];
   profile?: ContentProfile;
+  cast_detail?: {
+    name: string;
+    character?: string;
+    profile_path?: string | null;
+  }[];
 }
 
 export interface RecommendationItem {

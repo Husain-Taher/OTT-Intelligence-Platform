@@ -274,11 +274,40 @@ def get_taste_universe(user: AuthUser = Depends(get_current_user)):
         }
     ]
 
+    # Frontier Discovery (titles sitting outside the user's primary clusters with high novelty and masterpiece rating)
+    primary_genres = {g for g, w in taste.genres.items() if w >= 0.7}
+    frontier_candidates = [
+        i for i in all_items 
+        if i.vote_average >= 8.0 
+        and not any(g in primary_genres for g in i.genres)
+    ]
+    if not frontier_candidates:
+        frontier_candidates = [i for i in all_items if i.vote_average >= 8.2]
+    
+    frontier_scored = []
+    for item in frontier_candidates:
+        pct, breakdown, reasons, diffs = TasteEngine.calculate_personal_match(taste, item)
+        frontier_scored.append({
+            "content": item,
+            "personal_match_percentage": pct,
+            "novelty_score": 0.88,
+            "discovery_reason": f"High-calibre {item.genres[0] if item.genres else 'cinema'} ({item.vote_average}★) outside your comfort zone"
+        })
+    frontier_scored.sort(key=lambda x: (x["content"].vote_average, -x["personal_match_percentage"]), reverse=True)
+
     return {
         "user_id": user_id,
         "interaction_count": taste.interaction_count,
-        "clusters": clusters
+        "clusters": clusters,
+        "frontier_titles": frontier_scored[:8]
     }
+
+@router.post("/profile/reset-taste")
+def reset_user_taste_route(user: AuthUser = Depends(get_current_user)):
+    """Resets user taste profile to neutral baseline."""
+    taste = TasteEngine.get_blank_taste(user.user_id)
+    save_user_taste(taste)
+    return {"status": "reset", "user_id": user.user_id}
 
 @router.post("/recommendations")
 def get_recommendations(
@@ -676,6 +705,100 @@ def search_person_online(query: str = Query(...)):
         "query": query,
         "count": len(results),
         "results": results
+    }
+
+@router.get("/people/character-vibe")
+def match_character_vibe(
+    actor_name: str = Query(...),
+    character_name: Optional[str] = Query(None),
+    reference_title: Optional[str] = Query(None),
+    user: AuthUser = Depends(get_current_user)
+):
+    """
+    Finds titles and characters with the same psychological/narrative vibe as an actor's character.
+    e.g. Cillian Murphy as J. Robert Oppenheimer / Thomas Shelby -> complex, intense, slow-burn psychological dramas.
+    """
+    all_items = get_all_content()
+    engine = get_initialized_semantic_engine()
+    taste = _load_taste(user.user_id)
+
+    # 1. Synthesize character query representation
+    query_parts = [actor_name]
+    if character_name:
+        query_parts.append(f"as {character_name}")
+    if reference_title:
+        query_parts.append(f"in {reference_title}")
+    
+    char_query = " ".join(query_parts)
+    
+    # 2. Extract semantic intent & vector
+    parsed_intent = engine.parse_natural_intent(f"character study like {char_query} intense complex deep performance")
+    
+    # Check if we have the reference title to derive its emotion/pacing profile
+    ref_item = None
+    if reference_title:
+        ref_item = next((i for i in all_items if reference_title.lower() in i.title.lower()), None)
+    
+    candidates = []
+    for item in all_items:
+        # Exclude the exact reference title
+        if ref_item and item.content_id == ref_item.content_id:
+            continue
+        
+        # Calculate mood/vibe match
+        match_score = 0.0
+        reasons = []
+        
+        # Actor appearance boost
+        has_same_actor = actor_name.lower() in [c.lower() for c in item.cast]
+        if has_same_actor:
+            match_score += 0.35
+            reasons.append(f"Features {actor_name} delivering a signature performance")
+        
+        # Character/thematic vector similarity
+        if engine.vector_index:
+            sim = engine.vector_index.search(char_query, top_k=50)
+            sim_dict = {cid: s for cid, s in sim}
+            if item.content_id in sim_dict:
+                match_score += sim_dict[item.content_id] * 0.40
+
+        # Profile emotion & intensity alignment
+        if ref_item and ref_item.profile and item.profile:
+            ref_emotions = set(k for k, v in ref_item.profile.emotions.items() if v >= 0.4)
+            item_emotions = set(k for k, v in item.profile.emotions.items() if v >= 0.4)
+            common_emotions = ref_emotions.intersection(item_emotions)
+            if common_emotions:
+                match_score += len(common_emotions) * 0.1
+                reasons.append(f"Shares emotional tone: {', '.join(list(common_emotions)[:2]).title()}")
+            
+            # Pacing alignment
+            dominant_ref_pace = max(ref_item.profile.pacing.items(), key=lambda x: x[1])[0]
+            if item.profile.pacing.get(dominant_ref_pace, 0) > 0.5:
+                match_score += 0.15
+                reasons.append(f"Matching {dominant_ref_pace.replace('_', ' ')} narrative progression")
+
+        if match_score > 0.3 or has_same_actor:
+            pct = int(min(98, max(50, match_score * 100)))
+            if not reasons:
+                reasons.append(f"Resonates with the complex character energy of {char_query}")
+            
+            candidates.append({
+                "content": item,
+                "character_vibe_score": round(match_score, 3),
+                "personal_match_percentage": pct,
+                "vibe_reasons": reasons[:3],
+                "matched_character_archetype": f"Complex performance akin to {character_name or actor_name}"
+            })
+
+    candidates.sort(key=lambda x: (x["character_vibe_score"], x["content"].vote_average), reverse=True)
+
+    return {
+        "actor_name": actor_name,
+        "character_name": character_name,
+        "reference_title": reference_title,
+        "archetype_summary": f"Characters and films channeling the intense, magnetic aura of {char_query}",
+        "count": len(candidates),
+        "results": candidates[:12]
     }
 
 @router.get("/user/watchlist")

@@ -112,4 +112,29 @@ export const submitPickFeedback = (mood: string, contentId: string, matched: num
 export const deleteMyData = () =>
   request<{ status: string }>(`/me`, { method: "DELETE" });
 
+// ---- People & Character Intelligence ---------------------------------------
+export const fetchPeopleHub = () =>
+  request<{ directors: any[]; stars: any[] }>(`/people`);
+
+export const searchPeopleOnline = (query: string) =>
+  request<{ query: string; count: number; results: any[] }>(`/people/search?query=${encodeURIComponent(query)}`);
+
+export const fetchCharacterVibe = (params: {
+  actorName: string;
+  characterName?: string;
+  referenceTitle?: string;
+}) => {
+  const q = new URLSearchParams({ actor_name: params.actorName });
+  if (params.characterName) q.append("character_name", params.characterName);
+  if (params.referenceTitle) q.append("reference_title", params.referenceTitle);
+  return request<any>(`/people/character-vibe?${q.toString()}`);
+};
+
+// ---- Taste Universe Actions ------------------------------------------------
+export const tuneClusterWeight = (clusterId: string, weight: number) =>
+  post<{ status: string; cluster_id: string; weight: number }>(`/profile/tune-cluster`, { cluster_id: clusterId, weight });
+
+export const resetTasteProfile = () =>
+  post<{ status: string; user_id: string }>(`/profile/reset-taste`);
+
 
