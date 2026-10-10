@@ -32,7 +32,7 @@ export default function MoodDimmer({ value, onChange, variant = "arc" }: MoodDim
       <div
         role="radiogroup"
         aria-label="How are you feeling tonight?"
-        className={`scroll-snap-row flex gap-3 overflow-x-auto px-2 pb-2 pt-1 md:justify-center md:gap-5 md:overflow-visible ${arc ? "md:pb-[72px] md:pt-0" : ""}`}
+        className={`scroll-snap-row flex gap-3.5 overflow-x-auto px-4 pb-3 pt-2 md:justify-center md:gap-5 md:overflow-visible ${arc ? "md:pb-[72px] md:pt-0" : ""}`}
       >
         {MOODS.map((m, i) => {
           const on = value === m.id;
@@ -47,7 +47,7 @@ export default function MoodDimmer({ value, onChange, variant = "arc" }: MoodDim
               onKeyDown={(e) => onKey(e, i)}
               onClick={() => onChange(m.id)}
               style={{ transform: `translateY(${drop}px)` }}
-              className="group relative flex shrink-0 flex-col items-center text-center transition-transform duration-500 focus-visible:outline-offset-8"
+              className="group relative flex shrink-0 flex-col items-center text-center transition-transform duration-500 focus-visible:outline-offset-8 touch-manipulation active:scale-95"
             >
               {/* hanger */}
               <span aria-hidden className="mb-1 hidden h-5 w-px bg-gradient-to-b from-transparent to-brass/60 md:block" />

@@ -41,7 +41,7 @@ function Theater() {
     <>
       <Curtain />
       <Navigation activeTab={tab} onTabChange={go} />
-      <main className="relative z-10 mx-auto w-full max-w-7xl flex-1 px-4 pb-28 pt-10 sm:px-6 md:pb-16 lg:px-8">
+      <main className="relative z-10 mx-auto w-full max-w-7xl flex-1 px-4 pb-32 pt-6 sm:px-6 md:pb-16 md:pt-10 lg:px-8">
         {tab === "discover" && <DiscoveryHomeView onSelectTitle={select} onOpenStudio={() => go("studio")} />}
         {tab === "studio" && <MoodStudio onSelectTitle={select} />}
         {tab === "taste-universe" && <TasteUniverseView />}
