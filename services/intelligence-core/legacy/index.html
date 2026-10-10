@@ -1,0 +1,2536 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OTT Intelligence Platform | Preference Intelligence & Discovery</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            background: "#05060A",
+            surface: {
+              DEFAULT: "#0D0F18",
+              elevated: "#141724",
+              subtle: "#1B1F33",
+            },
+            accent: {
+              DEFAULT: "#6366F1",
+              glow: "#818CF8",
+              amber: "#F59E0B",
+              cyan: "#06B6D4",
+              emerald: "#10B981",
+              rose: "#F43F5E"
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Space Grotesk', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & Babel for zero-build resilience -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body {
+      background-color: #030408;
+      color: #F8FAFC;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+      letter-spacing: -0.01em;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #030408; }
+    ::-webkit-scrollbar-thumb { background: #1C2237; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #39426B; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.22; transform: scale(1) translateY(0); }
+      50% { opacity: 0.42; transform: scale(1.06) translateY(-8px); }
+    }
+    .ambient-aurora {
+      animation: pulseGlow 12s ease-in-out infinite;
+    }
+
+    @keyframes cinematicBeam {
+      0% { transform: rotate(-7deg) translateX(-12%); opacity: 0.12; }
+      50% { transform: rotate(7deg) translateX(12%); opacity: 0.32; }
+      100% { transform: rotate(-7deg) translateX(-12%); opacity: 0.12; }
+    }
+    .cinematic-beam {
+      animation: cinematicBeam 18s ease-in-out infinite;
+    }
+
+    .theater-glow {
+      box-shadow: 0 0 70px -10px rgba(99, 102, 241, 0.32), 0 0 30px -5px rgba(245, 158, 11, 0.15);
+    }
+    .theater-glow-gold {
+      box-shadow: 0 0 60px -10px rgba(245, 158, 11, 0.35);
+    }
+
+    .glass-card {
+      background: linear-gradient(145deg, rgba(16, 20, 34, 0.82) 0%, rgba(8, 10, 18, 0.92) 100%);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .glass-card:hover {
+      border-color: rgba(245, 158, 11, 0.4);
+      box-shadow: 0 16px 40px -10px rgba(99, 102, 241, 0.25), 0 0 20px -2px rgba(245, 158, 11, 0.18);
+    }
+
+    .shimmer-text {
+      background: linear-gradient(90deg, #FFFFFF 0%, #FDE68A 25%, #C7D2FE 60%, #FFFFFF 100%);
+      background-size: 200% auto;
+      color: transparent;
+      -webkit-background-clip: text;
+      background-clip: text;
+      animation: shine 7s linear infinite;
+    }
+    @keyframes shine {
+      to { background-position: 200% center; }
+    }
+  </style>
+</head>
+<body class="min-h-screen antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const API_BASE = "/v1";
+
+    // --- MAIN APPLICATION ---
+    function App() {
+      const [activeTab, setActiveTab] = useState("discover");
+      const [deck, setDeck] = useState(null);
+      const [allContent, setAllContent] = useState([]);
+      const [selectedTitle, setSelectedTitle] = useState(null);
+      const [activeTrailerKey, setActiveTrailerKey] = useState(null);
+      const [tasteProfile, setTasteProfile] = useState(null);
+      const [tasteUniverse, setTasteUniverse] = useState(null);
+      const [peopleHub, setPeopleHub] = useState(null);
+      const [userProfile, setUserProfile] = useState(null);
+      const [watchlist, setWatchlist] = useState([]);
+      const [toastMessage, setToastMessage] = useState(null);
+      const [showCalibrationModal, setShowCalibrationModal] = useState(false);
+      const [showAuthModal, setShowAuthModal] = useState(false);
+      const [currentUser, setCurrentUser] = useState({
+        user_id: localStorage.getItem("ott_user_id") || "default_user",
+        username: localStorage.getItem("ott_username") || "Cinephile Pioneer",
+        token: localStorage.getItem("ott_token") || null
+      });
+      const [isTrainingML, setIsTrainingML] = useState(false);
+
+      useEffect(() => {
+        loadDeck();
+        loadAllContent();
+        loadTasteData(currentUser.user_id);
+        loadPeopleHub();
+        loadUserProfile(currentUser.user_id);
+        loadWatchlist(currentUser.user_id);
+      }, [currentUser.user_id]);
+
+      const showToast = (msg) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(null), 3500);
+      };
+
+      const loadDeck = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/discover?user_id=${currentUser.user_id}`);
+          setDeck(await res.json());
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const loadAllContent = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/content`);
+          setAllContent(await res.json());
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const loadTasteData = async (uid = currentUser.user_id) => {
+        try {
+          const [pRes, uRes] = await Promise.all([
+            fetch(`${API_BASE}/profile/taste?user_id=${uid}`),
+            fetch(`${API_BASE}/profile/taste-universe?user_id=${uid}`)
+          ]);
+          setTasteProfile(await pRes.json());
+          setTasteUniverse(await uRes.json());
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const loadPeopleHub = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/people`);
+          setPeopleHub(await res.json());
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const loadUserProfile = async (uid = currentUser.user_id) => {
+        try {
+          const res = await fetch(`${API_BASE}/user/profile?user_id=${uid}`);
+          setUserProfile(await res.json());
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const loadWatchlist = async (uid = currentUser.user_id) => {
+        try {
+          const res = await fetch(`${API_BASE}/user/watchlist?user_id=${uid}`);
+          const data = await res.json();
+          setWatchlist(data.items || []);
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const handleToggleWatchlist = async (contentId, titleName) => {
+        try {
+          const res = await fetch(`${API_BASE}/user/watchlist/toggle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content_id: contentId, user_id: currentUser.user_id })
+          });
+          const data = await res.json();
+          showToast(data.is_saved ? `Saved to Watchlist: ${titleName}` : `Removed from Watchlist: ${titleName}`);
+          loadWatchlist();
+          loadUserProfile();
+          loadTasteData();
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const handleEventLogged = () => {
+        loadTasteData();
+        loadDeck();
+        loadUserProfile();
+        loadWatchlist();
+      };
+
+      const handleTriggerMLTraining = async () => {
+        setIsTrainingML(true);
+        try {
+          const res = await fetch(`${API_BASE}/ml/train-user`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: currentUser.user_id })
+          });
+          const data = await res.json();
+          showToast(`ML Pipeline: Synthesized ${data.ml_training_result?.events_processed || 0} behavioral events! Archetype: ${data.ml_training_result?.archetype}`);
+          loadTasteData();
+          loadUserProfile();
+          loadDeck();
+        } catch (e) {
+          console.error(e);
+          showToast("ML Pipeline execution failed");
+        }
+        setIsTrainingML(false);
+      };
+
+      const handleUserAuthenticated = (userObj) => {
+        localStorage.setItem("ott_user_id", userObj.user_id);
+        localStorage.setItem("ott_username", userObj.username);
+        if (userObj.access_token) {
+          localStorage.setItem("ott_token", userObj.access_token);
+        }
+        setCurrentUser({
+          user_id: userObj.user_id,
+          username: userObj.username,
+          token: userObj.access_token || null
+        });
+        showToast(`Welcome back, ${userObj.username}! Personal vectors loaded.`);
+        setShowAuthModal(false);
+      };
+
+      const handleSignOut = () => {
+        localStorage.removeItem("ott_user_id");
+        localStorage.removeItem("ott_username");
+        localStorage.removeItem("ott_token");
+        setCurrentUser({
+          user_id: "default_user",
+          username: "Cinephile Pioneer",
+          token: null
+        });
+        showToast("Signed out. Switched to Guest Profile.");
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col relative bg-[#030408] text-slate-100">
+          {/* Flagship Theater Atmosphere Lights */}
+          <div className="fixed top-0 left-1/4 -translate-x-1/2 w-[600px] h-[500px] bg-[radial-gradient(circle,rgba(99,102,241,0.22)_0%,transparent_70%)] pointer-events-none ambient-aurora filter blur-3xl" />
+          <div className="fixed top-10 right-1/4 translate-x-1/2 w-[550px] h-[450px] bg-[radial-gradient(circle,rgba(244,63,94,0.15)_0%,transparent_70%)] pointer-events-none ambient-aurora filter blur-3xl" style={{ animationDelay: '-4s' }} />
+          <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full h-[700px] bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.08)_0%,transparent_75%)] pointer-events-none filter blur-2xl" />
+          <div className="fixed -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[350px] bg-gradient-to-b from-indigo-500/15 via-purple-500/10 to-transparent pointer-events-none cinematic-beam filter blur-2xl" />
+
+          {/* Navigation Bar */}
+          <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#030408]/85 backdrop-blur-2xl transition-all">
+            <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 py-2">
+              
+              {/* Logo / Brand */}
+              <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActiveTab("discover")}>
+                <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-indigo-600 to-rose-600 p-[1.5px] shadow-2xl shadow-indigo-500/30 group-hover:scale-105 transition-transform duration-300">
+                  <div className="h-full w-full bg-[#070913] rounded-2xl flex items-center justify-center">
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-indigo-300 to-white text-xl font-black">✦</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black tracking-widest text-white text-sm sm:text-base shimmer-text font-display">OTT INTELLIGENCE</span>
+                    <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-400/50" />
+                  </div>
+                  <p className="text-[10px] text-indigo-300/80 tracking-widest uppercase font-bold flex items-center gap-1.5">
+                    <span>FLAGSHIP PREFERENCE ENGINE</span>
+                    <span className="text-white/30">•</span>
+                    <span className="text-amber-400 font-extrabold">GLOBAL CINEMA</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Navigation Tabs */}
+              <nav className="flex items-center gap-1 sm:gap-2">
+                {[
+                  { id: "discover", label: "Discover", badge: null },
+                  { id: "find-my-watch", label: "Find My Watch", badge: "SIGNATURE" },
+                  { id: "people", label: "Stars & Directors", badge: "AUTEURS" },
+                  { id: "taste-universe", label: "Taste Universe", badge: "GALAXY" },
+                  { id: "profile", label: "My Profile", badge: watchlist.length > 0 ? `${watchlist.length}` : null },
+                  { id: "search", label: "Intent Search", badge: null },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`relative flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all ${
+                      activeTab === item.id
+                        ? "bg-white/[0.08] text-white shadow-inner border border-white/[0.12]"
+                        : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {item.badge && (
+                      <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-[9px] font-bold text-indigo-300 border border-indigo-500/30">
+                        {item.badge}
+                      </span>
+                    )}
+                    {activeTab === item.id && (
+                      <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full" />
+                    )}
+                  </button>
+                ))}
+              </nav>
+
+              {/* ML Training Pipeline & Auth Controls */}
+              <div className="flex items-center gap-2.5">
+                {/* Master ML Continuous Training Button */}
+                <button
+                  onClick={handleTriggerMLTraining}
+                  disabled={isTrainingML}
+                  title="Run continuous ML learning loop on historical events"
+                  className="hidden md:flex items-center gap-1.5 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-full text-xs font-semibold text-emerald-300 transition-all hover:scale-102 disabled:opacity-50"
+                >
+                  <span className={isTrainingML ? "animate-spin inline-block" : "inline-block"}>⚙</span>
+                  <span>{isTrainingML ? "Training ML Model..." : "Train ML Model"}</span>
+                  <span className="text-[9px] bg-emerald-500/30 text-emerald-200 px-1.5 py-0.2 rounded font-black">AI</span>
+                </button>
+
+                {/* Archetype / Taste Calibration Trigger */}
+                <button
+                  onClick={() => setShowCalibrationModal(true)}
+                  className="flex items-center gap-2 border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 px-3.5 py-1.5 rounded-full transition-all group"
+                >
+                  <div className="h-2 w-2 rounded-full bg-indigo-400 group-hover:scale-125 transition-transform" />
+                  <span className="text-xs text-indigo-200 font-semibold hidden sm:inline">Calibrate Taste</span>
+                  <span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/30 px-1.5 py-0.2 rounded">ML</span>
+                </button>
+
+                {/* User Auth Profile Trigger */}
+                {currentUser.token ? (
+                  <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-full pl-2.5 pr-1 py-1">
+                    <span className="text-xs font-bold text-amber-300 truncate max-w-[90px] sm:max-w-[130px]">
+                      {currentUser.username}
+                    </span>
+                    <button
+                      onClick={handleSignOut}
+                      className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-full text-slate-300 hover:text-white transition-colors"
+                      title="Sign Out"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-3.5 py-1.5 text-xs shadow-lg shadow-amber-500/20 transition-all hover:scale-105"
+                  >
+                    <span>Sign In / Sign Up</span>
+                  </button>
+                )}
+              </div>
+
+            </div>
+          </header>
+
+          {/* Toast Notification */}
+          {toastMessage && (
+            <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-semibold text-white shadow-2xl border border-indigo-400/40 flex items-center gap-2 animate-bounce">
+              <span>✓</span>
+              <span>{toastMessage}</span>
+            </div>
+          )}
+
+          {/* Main Workspace Area */}
+          <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex-1 relative z-10">
+            {activeTab === "discover" && (
+              <DiscoverView
+                deck={deck}
+                allContent={allContent}
+                watchlist={watchlist}
+                onSelectTitle={setSelectedTitle}
+                onPlayTrailer={setActiveTrailerKey}
+                onToggleWatchlist={handleToggleWatchlist}
+                onOpenFindMyWatch={() => setActiveTab("find-my-watch")}
+              />
+            )}
+            {activeTab === "find-my-watch" && (
+              <FindMyWatchView
+                watchlist={watchlist}
+                onSelectTitle={setSelectedTitle}
+                onPlayTrailer={setActiveTrailerKey}
+                onToggleWatchlist={handleToggleWatchlist}
+              />
+            )}
+            {activeTab === "people" && (
+              <PeopleHubView
+                peopleHub={peopleHub}
+                onSelectTitle={setSelectedTitle}
+                onPlayTrailer={setActiveTrailerKey}
+              />
+            )}
+            {activeTab === "taste-universe" && (
+              <TasteUniverseComponent
+                universe={tasteUniverse}
+                profile={tasteProfile}
+                onSelectTitle={setSelectedTitle}
+                onPlayTrailer={setActiveTrailerKey}
+                onClusterTuned={loadTasteData}
+              />
+            )}
+            {activeTab === "profile" && (
+              <ProfileAndWatchlistView
+                userProfile={userProfile}
+                tasteProfile={tasteProfile}
+                watchlist={watchlist}
+                isTrainingML={isTrainingML}
+                onTriggerMLTraining={handleTriggerMLTraining}
+                onSelectTitle={setSelectedTitle}
+                onPlayTrailer={setActiveTrailerKey}
+                onToggleWatchlist={handleToggleWatchlist}
+                onOpenCalibration={() => setShowCalibrationModal(true)}
+              />
+            )}
+            {activeTab === "search" && (
+              <SearchView
+                watchlist={watchlist}
+                onSelectTitle={setSelectedTitle}
+                onPlayTrailer={setActiveTrailerKey}
+                onToggleWatchlist={handleToggleWatchlist}
+              />
+            )}
+          </main>
+
+          {/* Video Trailer Theater Modal */}
+          {activeTrailerKey && (
+            <TrailerTheaterModal
+              trailerKey={activeTrailerKey}
+              onClose={() => setActiveTrailerKey(null)}
+            />
+          )}
+
+          {/* Why Should I Watch This Modal with Story Card & Gallery Tabs */}
+          {selectedTitle && (
+            <WhyModal
+              content={selectedTitle}
+              isSaved={watchlist.some(w => w.content_id === selectedTitle.content_id)}
+              onClose={() => setSelectedTitle(null)}
+              onPlayTrailer={setActiveTrailerKey}
+              onToggleWatchlist={() => handleToggleWatchlist(selectedTitle.content_id, selectedTitle.title)}
+              onEventLogged={(label) => {
+                showToast(`Recorded: ${label}`);
+                handleEventLogged();
+              }}
+            />
+          )}
+
+          {/* Taste Calibration & Archetype Modal */}
+          {showCalibrationModal && (
+            <TasteCalibrationModal
+              onClose={() => setShowCalibrationModal(false)}
+              onArchetypeSelected={(name) => {
+                showToast(`Taste Profile Calibrated: ${name}`);
+                setShowCalibrationModal(false);
+                handleEventLogged();
+              }}
+            />
+          )}
+
+          {/* User Sign In / Registration Modal */}
+          {showAuthModal && (
+            <AuthModal
+              onClose={() => setShowAuthModal(false)}
+              onSuccess={handleUserAuthenticated}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // --- 1. DISCOVER VIEW (Section 29) ---
+    function DiscoverView({ deck, allContent, watchlist, onSelectTitle, onPlayTrailer, onToggleWatchlist, onOpenFindMyWatch }) {
+      const [activeCategory, setActiveCategory] = useState("all");
+
+      if (!deck) {
+        return (
+          <div className="flex h-96 items-center justify-center text-slate-400">
+            <span className="text-sm font-semibold tracking-wider animate-pulse">Synthesizing live entertainment discovery deck...</span>
+          </div>
+        );
+      }
+
+      const hero = deck.hero;
+
+      const filteredGrid = allContent.filter(item => {
+        if (activeCategory === "all") return true;
+        if (activeCategory === "scifi") return item.genres.includes("Science Fiction");
+        if (activeCategory === "bollywood") return item.origin_countries.includes("IN") || ["hi", "ta", "te", "kn", "ml"].includes(item.original_language);
+        if (activeCategory === "thriller") return item.genres.includes("Thriller") || item.genres.includes("Mystery");
+        if (activeCategory === "drama") return item.genres.includes("Drama") || item.genres.includes("Romance");
+        if (activeCategory === "action") return item.genres.includes("Action") || item.genres.includes("Adventure");
+        if (activeCategory === "comfort") return item.genres.includes("Comedy") || item.genres.includes("Family") || item.genres.includes("Animation");
+        if (activeCategory === "international") return !["US", "GB"].includes(item.origin_countries[0]);
+        if (activeCategory === "series") return item.content_type === "series";
+        return true;
+      });
+
+      return (
+        <div className="space-y-12">
+          {/* Header Experience Prompt Buttons */}
+          <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 sm:p-8">
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="text-xs font-bold uppercase tracking-widest text-indigo-400">Good Evening</h1>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
+                  What kind of experience are you looking for?
+                </h2>
+              </div>
+              <div className="hidden sm:block text-right">
+                <span className="text-xs font-bold text-slate-300">{deck.total_catalog_size || 97} Master Titles</span>
+                <p className="text-[10px] text-slate-500 uppercase">Live Global Feed</p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {[
+                "I want to feel something",
+                "I want a mystery",
+                "Surprise me",
+                "Something comforting",
+                "Intellectually intense",
+                "I have 90 minutes"
+              ].map((label, i) => (
+                <button
+                  key={i}
+                  onClick={onOpenFindMyWatch}
+                  className="rounded-xl border border-white/[0.1] bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-slate-200 hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-white transition-all shadow-sm"
+                >
+                  [ {label} ]
+                </button>
+              ))}
+              <button
+                onClick={onOpenFindMyWatch}
+                className="rounded-xl border border-indigo-500/40 bg-gradient-to-r from-indigo-600/30 to-indigo-500/20 px-4 py-2 text-xs font-bold text-indigo-200 hover:from-indigo-600/50 hover:to-indigo-500/40 transition-all shadow-sm"
+              >
+                [ I don't know what I want → ]
+              </button>
+            </div>
+          </div>
+
+          {/* Hero Recommendation */}
+          {hero && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold tracking-wider text-slate-400 uppercase">
+                  YOUR NIGHT • HERO RECOMMENDATION
+                </h3>
+                <span className="text-xs font-bold text-emerald-400">
+                  {hero.personal_match_percentage}% Personal Match
+                </span>
+              </div>
+
+              <div className="relative overflow-hidden rounded-3xl border border-white/[0.15] bg-surface shadow-2xl group theater-glow">
+                <div className="relative aspect-[21/9] min-h-[380px] w-full overflow-hidden">
+                  <img
+                    src={hero.content.backdrop_path || hero.content.poster_path}
+                    alt={hero.content.title}
+                    className="h-full w-full object-cover object-center group-hover:scale-104 transition-transform duration-1000 ease-out"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#030408] via-[#030408]/65 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#030408]/90 via-[#030408]/30 to-transparent" />
+
+                  <div className="absolute bottom-8 left-8 right-8 max-w-4xl">
+                    <div className="flex flex-wrap items-center gap-2.5 mb-3">
+                      <span className="rounded-full bg-emerald-500/20 backdrop-blur-md px-3.5 py-1 text-xs font-black text-emerald-400 border border-emerald-400/40 shadow-lg shadow-emerald-500/10">
+                        ✦ {hero.personal_match_percentage}% PREFERENCE MATCH
+                      </span>
+                      {hero.content.vote_average > 0 && (
+                        <span className="rounded-full bg-amber-500/20 backdrop-blur-md px-3 py-1 text-xs font-extrabold text-amber-300 border border-amber-400/40 shadow-lg">
+                          ★ {hero.content.vote_average.toFixed(1)} / 10
+                        </span>
+                      )}
+                      {hero.content.release_year && (
+                        <span className="text-xs text-slate-200 font-bold bg-white/10 px-2.5 py-1 rounded-full">{hero.content.release_year}</span>
+                      )}
+                      {hero.content.runtime && (
+                        <span className="text-xs text-slate-200 font-bold bg-white/10 px-2.5 py-1 rounded-full">{hero.content.runtime} min</span>
+                      )}
+                      <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-bold text-indigo-200 border border-indigo-400/30">
+                        {hero.content.genres?.slice(0, 3).join(" • ")}
+                      </span>
+                    </div>
+
+                    <h2 className="text-4xl sm:text-6xl font-black text-white tracking-tight leading-none drop-shadow-xl font-display">
+                      {hero.content.title}
+                    </h2>
+                    {hero.content.tagline && (
+                      <p className="mt-2 text-sm sm:text-base text-amber-200/90 italic font-medium">"{hero.content.tagline}"</p>
+                    )}
+                    <p className="mt-2.5 text-xs sm:text-sm text-slate-300 max-w-2xl line-clamp-2 leading-relaxed">
+                      {hero.content.overview}
+                    </p>
+
+                    <div className="mt-6 flex flex-wrap items-center gap-3.5">
+                      {hero.content.trailer_key && (
+                        <button
+                          onClick={() => onPlayTrailer(hero.content.trailer_key)}
+                          className="flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-slate-950 px-6 py-3 text-xs font-black shadow-xl shadow-amber-500/20 hover:scale-105 transition-all border border-amber-300"
+                        >
+                          <span className="text-sm">▶</span>
+                          <span>Watch Official Trailer</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onSelectTitle(hero.content)}
+                        className="flex items-center gap-2 rounded-2xl bg-indigo-600/90 hover:bg-indigo-600 px-6 py-3 text-xs font-bold text-white shadow-xl shadow-indigo-600/20 hover:scale-105 transition-all border border-indigo-400/40"
+                      >
+                        <span>Why Should I Watch This?</span>
+                      </button>
+                      <button
+                        onClick={() => onToggleWatchlist(hero.content.content_id, hero.content.title)}
+                        className="flex items-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md px-5 py-3 text-xs font-bold text-white hover:bg-white/20 transition-all"
+                      >
+                        <span>{watchlist.some(w => w.content_id === hero.content.content_id) ? "★ Saved in Watchlist" : "+ Add to Watchlist"}</span>
+                      </button>
+                      {hero.contrasting_note && (
+                        <span className="hidden lg:inline text-xs text-indigo-300 italic font-medium bg-indigo-950/40 px-3 py-1.5 rounded-xl border border-indigo-500/20">
+                          ✦ {hero.contrasting_note.slice(0, 110)}...
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Thematic Rails */}
+          {deck.comfort_rail && deck.comfort_rail.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-white">Comfort, Wholesome & Heartwarming</h3>
+                  <p className="text-xs text-slate-400">Zero anxiety, pure charm & uplifting narrative construction</p>
+                </div>
+                <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300 border border-amber-500/20">
+                  Feel-Good Collection
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                {deck.comfort_rail.map((item) => (
+                  <MovieCardComponent
+                    key={item.content.content_id}
+                    item={item}
+                    isSaved={watchlist.some(w => w.content_id === item.content.content_id)}
+                    onSelect={onSelectTitle}
+                    onPlayTrailer={onPlayTrailer}
+                    onToggleWatchlist={onToggleWatchlist}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {deck.adrenaline_rail && deck.adrenaline_rail.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-white">Kinetic Momentum & Adrenaline</h3>
+                  <p className="text-xs text-slate-400">High-tension momentum, razor-sharp pacing, and stunt spectacle</p>
+                </div>
+                <span className="rounded-full bg-rose-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-rose-300 border border-rose-500/20">
+                  Spectacle
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                {deck.adrenaline_rail.map((item) => (
+                  <MovieCardComponent
+                    key={item.content.content_id}
+                    item={item}
+                    isSaved={watchlist.some(w => w.content_id === item.content.content_id)}
+                    onSelect={onSelectTitle}
+                    onPlayTrailer={onPlayTrailer}
+                    onToggleWatchlist={onToggleWatchlist}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Indian Cinema & Bollywood Masterpieces Rail (NEW!) */}
+          {deck.indian_cinema_rail && deck.indian_cinema_rail.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400 font-extrabold text-sm">✦</span>
+                    <h3 className="text-base font-bold text-white">Indian Cinema & Bollywood Masterpieces</h3>
+                  </div>
+                  <p className="text-xs text-slate-400">High-emotion narratives, auteur epics, and cultural landmarks from Indian cinema</p>
+                </div>
+                <span className="rounded-full bg-amber-500/15 px-3 py-1 text-[11px] font-bold text-amber-300 border border-amber-500/30 shadow-lg shadow-amber-500/10">
+                  ★ Bollywood & Pan-India Flagship
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {deck.indian_cinema_rail.map((item) => (
+                  <MovieCardComponent
+                    key={item.content.content_id}
+                    item={item}
+                    isSaved={watchlist.some(w => w.content_id === item.content.content_id)}
+                    onSelect={onSelectTitle}
+                    onPlayTrailer={onPlayTrailer}
+                    onToggleWatchlist={onToggleWatchlist}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Dynamic Master Catalog Filter Deck */}
+          <div className="space-y-6 pt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-white/[0.08] pt-8">
+              <div>
+                <h3 className="text-xl font-bold text-white">The Master Catalog</h3>
+                <p className="text-xs text-slate-400">Explore {filteredGrid.length} titles calibrated with emotion & aspect intelligence</p>
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: "all", label: "All Titles" },
+                  { id: "bollywood", label: "🇮🇳 Bollywood & India" },
+                  { id: "scifi", label: "Sci-Fi & Cosmos" },
+                  { id: "thriller", label: "Psychological Thrillers" },
+                  { id: "drama", label: "Emotional Dramas" },
+                  { id: "action", label: "Action & Spectacle" },
+                  { id: "comfort", label: "Comfort & Joy" },
+                  { id: "international", label: "World Cinema" },
+                  { id: "series", label: "TV Series" },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setActiveCategory(f.id)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                      activeCategory === f.id
+                        ? "bg-indigo-600 text-white font-semibold shadow-md"
+                        : "bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredGrid.slice(0, 24).map((item) => (
+                <MovieCardComponent
+                  key={item.content_id}
+                  item={{ content: item, personal_match_percentage: 90 }}
+                  isSaved={watchlist.some(w => w.content_id === item.content_id)}
+                  onSelect={onSelectTitle}
+                  onPlayTrailer={onPlayTrailer}
+                  onToggleWatchlist={onToggleWatchlist}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 2. FIND MY WATCH VIEW (Section 80) ---
+    function FindMyWatchView({ watchlist, onSelectTitle, onPlayTrailer, onToggleWatchlist }) {
+      const [prompt, setPrompt] = useState(
+        "I have 2 hours. I want something emotional but not depressing. A mystery with great visuals, preferably not American, and not overly complicated."
+      );
+      const [mood, setMood] = useState("mystery");
+      const [maxRuntime, setMaxRuntime] = useState(130);
+      const [novelty, setNovelty] = useState(0.7);
+      const [loading, setLoading] = useState(false);
+      const [result, setResult] = useState(null);
+
+      const handleExecute = async () => {
+        setLoading(true);
+        try {
+          const res = await fetch(`${API_BASE}/find-my-watch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt, mood, max_runtime: maxRuntime, novelty })
+          });
+          setResult(await res.json());
+        } catch (e) {
+          console.error(e);
+        }
+        setLoading(false);
+      };
+
+      useEffect(() => {
+        handleExecute();
+      }, [mood]);
+
+      const hero = result?.hero;
+      const metrics = result?.window_metrics;
+
+      return (
+        <div className="space-y-8">
+          <div className="rounded-2xl border border-indigo-500/25 bg-gradient-to-b from-indigo-950/20 via-surface to-surface p-6 sm:p-8 backdrop-blur-xl shadow-2xl">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="flex h-2 w-2 rounded-full bg-indigo-400 animate-ping" />
+              <span className="text-xs font-bold tracking-widest text-indigo-400 uppercase">
+                Signature Decision Engine
+              </span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-white">FIND MY WATCH</h1>
+            <p className="mt-2 text-sm text-slate-400 max-w-2xl leading-relaxed">
+              Express your exact evening in natural language. We synthesize intent, temporal constraints, emotional trajectories, and cross-cultural preference graphs to deliver your definitive watch window.
+            </p>
+
+            <div className="mt-6 space-y-4">
+              <textarea
+                rows="3"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-[#05060A] p-4 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
+                    Dominant Mood
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { id: "mystery", label: "Mystery & Intrigue" },
+                      { id: "comforting", label: "Comfort & Light" },
+                      { id: "exciting", label: "Action & Adrenaline" },
+                      { id: "emotional", label: "Deep Emotion" },
+                      { id: "reflective", label: "Philosophical Sci-Fi" },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => setMood(m.id)}
+                        className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${
+                          mood === m.id
+                            ? "bg-indigo-600 text-white font-bold shadow-md"
+                            : "bg-white/[0.04] text-slate-400 hover:bg-white/[0.08]"
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    <span>Runtime Constraint</span>
+                    <span className="text-indigo-400 font-bold">{maxRuntime} min</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="70"
+                    max="180"
+                    step="5"
+                    value={maxRuntime}
+                    onChange={(e) => setMaxRuntime(Number(e.target.value))}
+                    className="w-full accent-indigo-500 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                    <span>Quick (80m)</span>
+                    <span>Standard (120m)</span>
+                    <span>Epic (180m)</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    <span>Exploration Index</span>
+                    <span className="text-indigo-400 font-bold">
+                      {novelty < 0.4 ? "Familiar" : novelty > 0.7 ? "Experimental" : "Balanced"}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1.0"
+                    step="0.1"
+                    value={novelty}
+                    onChange={(e) => setNovelty(Number(e.target.value))}
+                    className="w-full accent-indigo-500 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                    <span>Comfortable</span>
+                    <span>Cross-Cultural Discovery</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  onClick={handleExecute}
+                  disabled={loading}
+                  className="rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 hover:scale-105 transition-all disabled:opacity-50"
+                >
+                  {loading ? "Analyzing Multidimensional Vectors..." : "Generate Perfect Watch"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Centerpiece Hero */}
+          {hero && metrics && (
+            <div className="space-y-6">
+              <div className="relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-surface-elevated shadow-2xl">
+                <div className="relative aspect-[21/9] w-full overflow-hidden">
+                  <img
+                    src={hero.content.backdrop_path || hero.content.poster_path}
+                    alt={hero.content.title}
+                    className="h-full w-full object-cover object-center"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-surface-elevated via-surface-elevated/70 to-transparent" />
+
+                  <div className="absolute top-6 left-6 flex items-center gap-2">
+                    <span className="rounded-full bg-emerald-500/20 backdrop-blur-md px-3 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/40">
+                      {hero.personal_match_percentage}% PERSONAL MATCH
+                    </span>
+                    <span className="rounded-full bg-black/60 backdrop-blur-md px-3 py-1 text-xs font-medium text-slate-300 border border-white/10">
+                      {result?.runtime_formatted}
+                    </span>
+                  </div>
+
+                  <div className="absolute bottom-6 left-6 right-6">
+                    <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+                      {hero.content.title}
+                    </h2>
+                    {hero.content.tagline && (
+                      <p className="mt-1 text-sm text-slate-300 italic">"{hero.content.tagline}"</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold tracking-wider text-slate-400 uppercase">
+                      YOUR PERFECT WINDOW SPECTRUM
+                    </h3>
+
+                    <div className="space-y-3 text-xs">
+                      {[
+                        { label: "Emotional Depth", val: metrics.emotional_depth, color: "bg-indigo-500" },
+                        { label: "Mystery Level", val: metrics.mystery_level, color: "bg-indigo-500" },
+                        { label: "Narrative Complexity", val: metrics.narrative_complexity, color: "bg-indigo-500" },
+                        { label: "Visual Atmosphere", val: metrics.visual_atmosphere, color: "bg-indigo-500" },
+                        { label: "Novelty & Cultural Discovery", val: metrics.novelty_quotient, color: "bg-emerald-500" },
+                      ].map((bar) => (
+                        <div key={bar.label}>
+                          <div className="flex justify-between mb-1">
+                            <span className="text-slate-300">{bar.label}</span>
+                            <span className="font-bold text-indigo-400">{bar.val}%</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-slate-800">
+                            <div className={`h-full rounded-full ${bar.color}`} style={{ width: `${bar.val}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col justify-between rounded-xl bg-white/[0.02] border border-white/[0.08] p-5">
+                    <div>
+                      <h3 className="text-xs font-bold tracking-wider text-indigo-400 uppercase mb-2">
+                        WHY THIS ONE?
+                      </h3>
+                      <p className="text-sm text-slate-200 leading-relaxed font-medium">
+                        {hero.contrasting_note}
+                      </p>
+
+                      <div className="mt-4 space-y-2">
+                        {hero.reasons.map((r, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs text-slate-300">
+                            <span className="text-emerald-400">✓</span>
+                            <span>{r}</span>
+                          </div>
+                        ))}
+                        {hero.differences_from_usual.map((d, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs text-indigo-300">
+                            <span>+</span>
+                            <span>{d}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-white/[0.08] flex items-center gap-3">
+                      {hero.content.trailer_key && (
+                        <button
+                          onClick={() => onPlayTrailer(hero.content.trailer_key)}
+                          className="flex items-center gap-1.5 rounded-xl bg-white text-slate-950 px-4 py-3 text-xs font-bold shadow-lg hover:bg-slate-200"
+                        >
+                          <span>▶ Trailer</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onSelectTitle(hero.content)}
+                        className="flex-1 rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white shadow-lg hover:bg-indigo-500 transition-colors"
+                      >
+                        Explore Why & Inspect
+                      </button>
+                      <button
+                        onClick={() => onToggleWatchlist(hero.content.content_id, hero.content.title)}
+                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs font-semibold text-slate-300 hover:bg-white/10"
+                      >
+                        {watchlist.some(w => w.content_id === hero.content.content_id) ? "★ Saved" : "+ Save"}
+                      </button>
+                      <button
+                        onClick={handleExecute}
+                        className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-slate-300 hover:bg-white/10"
+                      >
+                        Give Me Another
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Runners Up Rail */}
+              {result?.runners_up && result.runners_up.length > 0 && (
+                <div className="space-y-4 pt-4">
+                  <h3 className="text-base font-bold text-white tracking-wide">Alternative Angles For Tonight</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    {result.runners_up.map((item) => (
+                      <MovieCardComponent
+                        key={item.content.content_id}
+                        item={item}
+                        isSaved={watchlist.some(w => w.content_id === item.content.content_id)}
+                        onSelect={onSelectTitle}
+                        onPlayTrailer={onPlayTrailer}
+                        onToggleWatchlist={onToggleWatchlist}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // --- 3. STARS & DIRECTORS AUTEURS EXPLORER (WITH LIVE ONLINE PERSON DISCOVERY) ---
+    function PeopleHubView({ peopleHub, onSelectTitle, onPlayTrailer }) {
+      const [filterType, setFilterType] = useState("directors");
+      const [selectedPerson, setSelectedPerson] = useState(null);
+      const [searchQuery, setSearchQuery] = useState("");
+      const [searchResults, setSearchResults] = useState(null);
+      const [isSearching, setIsSearching] = useState(false);
+
+      if (!peopleHub) {
+        return <div className="text-center py-20 text-slate-400">Loading Stars & Directors Hub...</div>;
+      }
+
+      const handlePersonSearch = async (q) => {
+        const queryToRun = (q !== undefined ? q : searchQuery).trim();
+        if (!queryToRun) {
+          setSearchResults(null);
+          return;
+        }
+        setIsSearching(true);
+        try {
+          const res = await fetch(`${API_BASE}/people/search?query=${encodeURIComponent(queryToRun)}`);
+          const data = await res.json();
+          setSearchResults(data.results || []);
+          if (data.results?.length > 0) {
+            setSelectedPerson(data.results[0]);
+          }
+        } catch (e) {
+          console.error("Person search error:", e);
+        }
+        setIsSearching(false);
+      };
+
+      const clearSearch = () => {
+        setSearchQuery("");
+        setSearchResults(null);
+        setSelectedPerson(null);
+      };
+
+      const activeList = searchResults !== null 
+        ? searchResults 
+        : (filterType === "directors" ? peopleHub.directors : peopleHub.stars);
+
+      const spotlightRef = React.useRef(null);
+
+      const handleSelectPerson = (person) => {
+        setSelectedPerson(person);
+        setTimeout(() => {
+          if (spotlightRef.current) {
+            spotlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 50);
+      };
+
+      return (
+        <div className="space-y-8">
+          {/* Main Creator Hub Header & Live Search Bar */}
+          <div className="rounded-3xl border border-white/[0.1] bg-gradient-to-b from-[#101426] via-[#0A0D18] to-surface p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="text-xs font-black tracking-widest text-amber-400 uppercase">
+                    Creator & Auteur Intelligence Engine
+                  </span>
+                </div>
+                <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">Stars & Directors Studio</h1>
+                <p className="mt-1 text-sm text-slate-300 max-w-2xl leading-relaxed">
+                  Search any actor, auteur, or filmmaker globally. Explore their full filmographies ranked by viewer rating with instant trailer theater previews.
+                </p>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex gap-2 bg-black/60 p-1.5 rounded-2xl border border-white/10 shrink-0">
+                <button
+                  onClick={() => { setFilterType("directors"); clearSearch(); }}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all ${
+                    filterType === "directors" && searchResults === null ? "bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-lg" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Visionary Directors ({peopleHub.directors?.length || 0})
+                </button>
+                <button
+                  onClick={() => { setFilterType("stars"); clearSearch(); }}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all ${
+                    filterType === "stars" && searchResults === null ? "bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-lg" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Leading Stars ({peopleHub.stars?.length || 0})
+                </button>
+              </div>
+            </div>
+
+            {/* Live Search Engine Input */}
+            <div className="mt-6 pt-6 border-t border-white/[0.08] relative z-10 space-y-3">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handlePersonSearch();
+                }}
+                className="flex gap-3"
+              >
+                <div className="relative flex-1">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search ANY Actor or Director globally (e.g. Shah Rukh Khan, Christopher Nolan, Quentin Tarantino, Deepika Padukone, Leonardo DiCaprio)..."
+                    className="w-full rounded-2xl border border-white/15 bg-black/70 pl-11 pr-10 py-3.5 text-sm text-white placeholder-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 transition-all shadow-inner"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={clearSearch}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs font-bold bg-white/10 rounded-full h-6 w-6 flex items-center justify-center"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSearching}
+                  className="rounded-2xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-400 hover:to-purple-500 px-6 py-3.5 text-xs font-black text-white shadow-xl shadow-indigo-600/25 transition-all hover:scale-102 flex items-center gap-2"
+                >
+                  {isSearching ? <span className="animate-spin">⏳</span> : <span>Search Creator</span>}
+                </button>
+              </form>
+
+              {/* Quick Preset Tags for Instant Exploration */}
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-slate-400">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Quick Suggestions:</span>
+                {[
+                  "Shah Rukh Khan", "Christopher Nolan", "Deepika Padukone", 
+                  "Quentin Tarantino", "Aamir Khan", "Denis Villeneuve", 
+                  "Leonardo DiCaprio", "Rajkumar Hirani", "Cillian Murphy", 
+                  "Martin Scorsese", "Nawazuddin Siddiqui", "Alia Bhatt"
+                ].map((name, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setSearchQuery(name);
+                      handlePersonSearch(name);
+                    }}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/10 hover:border-amber-400/50 hover:text-amber-300 px-3 py-1 text-[11px] font-semibold text-slate-300 transition-all"
+                  >
+                    ✦ {name}
+                  </button>
+                ))}
+              </div>
+
+              {searchResults !== null && (
+                <div className="flex items-center justify-between text-xs text-amber-300 font-bold bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-xl mt-2">
+                  <span>Found {searchResults.length} online creator profiles matching "{searchQuery}"</span>
+                  <button onClick={clearSearch} className="text-slate-400 hover:text-white underline">
+                    Clear Search & Show Catalog
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Selected Creator Spotlight & Linked Filmography (Placed right below search/header for instant access!) */}
+          {selectedPerson && (
+            <div ref={spotlightRef} className="scroll-mt-24 p-6 sm:p-8 rounded-3xl border border-amber-500/40 bg-gradient-to-b from-[#141930] via-[#0A0D18] to-[#05060A] space-y-6 shadow-2xl relative overflow-hidden animate-fadeIn">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-6 relative z-10">
+                <div className="flex items-center gap-4">
+                  {selectedPerson.profile_path && (
+                    <img
+                      src={selectedPerson.profile_path}
+                      alt={selectedPerson.name}
+                      className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl object-cover object-top border-2 border-amber-400/70 shadow-xl"
+                    />
+                  )}
+                  <div>
+                    <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+                      <span>Active Creator Spotlight & Filmography</span>
+                    </span>
+                    <h3 className="text-2xl sm:text-4xl font-black text-white mt-0.5">{selectedPerson.name}</h3>
+                    <p className="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-2">
+                      <span className="text-indigo-300 font-bold bg-indigo-500/20 px-2 py-0.5 rounded">{selectedPerson.role}</span>
+                      <span>•</span>
+                      <span>Average Score: <strong className="text-amber-400">★ {selectedPerson.avg_rating} / 10</strong></span>
+                      <span>•</span>
+                      <span className="text-emerald-400 font-semibold">{selectedPerson.titles?.length || 0} Titles Ranked by Viewer Score</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const gridEl = document.getElementById('creators-directory-grid');
+                      if (gridEl) gridEl.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-white transition-all"
+                  >
+                    Browse Other Creators ↓
+                  </button>
+                  <button
+                    onClick={() => setSelectedPerson(null)}
+                    className="rounded-xl border border-amber-400/30 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2 text-xs font-bold text-amber-300 hover:text-white transition-all"
+                  >
+                    Close Spotlight ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <span className="text-amber-400">★</span>
+                    <span>Films & Series Ranked by Highest Audience Rating</span>
+                  </div>
+                  <span className="text-xs text-slate-500">Click any card to inspect or watch official trailer</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-1">
+                  {selectedPerson.titles?.map((content) => (
+                    <MovieCardComponent
+                      key={content.content_id}
+                      item={{
+                        content,
+                        personal_match_percentage: Math.round(content.vote_average * 10),
+                        reasons: [`Audience rating: ★ ${content.vote_average.toFixed(1)}/10 (${content.vote_count} votes)`]
+                      }}
+                      isSaved={false}
+                      onSelect={onSelectTitle}
+                      onPlayTrailer={onPlayTrailer}
+                      onToggleWatchlist={() => {}}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Creators Directory Grid */}
+          <div id="creators-directory-grid" className="space-y-4 pt-2">
+            <div className="flex items-center justify-between border-t border-white/[0.08] pt-6">
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  {searchResults !== null ? `Search Results (${activeList.length})` : (filterType === "directors" ? "Master Directors Directory" : "Leading Stars Directory")}
+                </h3>
+                <p className="text-xs text-slate-400">Select any card to instantly open their filmography spotlight above</p>
+              </div>
+              <span className="text-xs text-slate-400 bg-white/[0.04] px-3 py-1 rounded-full border border-white/[0.06]">
+                {activeList?.length || 0} Creators Available
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {activeList?.map((person, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => handleSelectPerson(person)}
+                  className={`group relative overflow-hidden rounded-2xl border cursor-pointer transition-all duration-300 ${
+                    selectedPerson?.name === person.name
+                      ? "border-amber-400 bg-amber-500/10 shadow-2xl shadow-amber-500/20 -translate-y-1 ring-2 ring-amber-400/50"
+                      : "border-white/[0.08] glass-card hover:border-amber-400/50 hover:-translate-y-1.5"
+                  }`}
+                >
+                  {/* Person Portrait Image */}
+                  <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-900">
+                    {person.profile_path ? (
+                      <img
+                        src={person.profile_path}
+                        alt={person.name}
+                        className="h-full w-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-indigo-900 via-slate-900 to-black font-extrabold text-2xl text-indigo-300">
+                        {person.name.charAt(0)}
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#070913] via-[#070913]/30 to-transparent" />
+                    
+                    {/* Rating Tag */}
+                    <div className="absolute top-2.5 right-2.5 rounded-full bg-black/80 backdrop-blur-md px-2 py-0.5 border border-amber-400/40 text-[10px] font-bold text-amber-300 flex items-center gap-1 shadow-md">
+                      <span>★</span>
+                      <span>{person.avg_rating}</span>
+                    </div>
+
+                    {/* Active Selected Indicator Badge */}
+                    {selectedPerson?.name === person.name && (
+                      <div className="absolute top-2.5 left-2.5 rounded-full bg-amber-400 text-black px-2 py-0.5 text-[9px] font-black shadow-lg">
+                        SELECTED
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-2.5 left-2.5 right-2.5">
+                      <span className="text-[9px] uppercase tracking-wider font-extrabold text-indigo-300 block">
+                        {person.role}
+                      </span>
+                      <h4 className="text-xs sm:text-sm font-black text-white line-clamp-2 leading-tight group-hover:text-amber-300 transition-colors break-words">
+                        {person.name}
+                      </h4>
+                      <span className="text-[10px] text-slate-300 font-semibold block mt-1">
+                        {person.masterpiece_count || person.starring_count} Masterpieces Linked
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 4. TASTE UNIVERSE (Section 33 - WORKING INTERACTIVE GALAXY) ---
+    function TasteUniverseComponent({ universe, profile, onSelectTitle, onPlayTrailer, onClusterTuned }) {
+      const [selectedCluster, setSelectedCluster] = useState(null);
+      const [clusterWeight, setClusterWeight] = useState(0.8);
+
+      useEffect(() => {
+        if (universe?.clusters?.length) {
+          setSelectedCluster(universe.clusters[0]);
+          setClusterWeight(universe.clusters[0].weight);
+        }
+      }, [universe]);
+
+      const handleSelectCluster = (c) => {
+        setSelectedCluster(c);
+        setClusterWeight(c.weight);
+      };
+
+      const handleTuneSlider = async (newVal) => {
+        setClusterWeight(newVal);
+        if (!selectedCluster) return;
+        try {
+          await fetch(`${API_BASE}/profile/tune-cluster`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cluster_id: selectedCluster.id, weight: newVal })
+          });
+          onClusterTuned();
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      if (!universe || !profile) {
+        return <div className="text-center py-20 text-slate-400">Loading Taste Universe...</div>;
+      }
+
+      return (
+        <div className="space-y-8">
+          <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 sm:p-8">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-xs font-bold tracking-widest text-indigo-400 uppercase">
+                  Living Preference Galaxy
+                </span>
+                <h1 className="text-3xl font-extrabold text-white mt-1">Taste Universe</h1>
+                <p className="mt-1 text-sm text-slate-400 max-w-2xl leading-relaxed">
+                  Your taste is not a flat genre tag. Click on any cluster node to reveal orbiting titles, adjust gravity parameters, and recalibrate your recommendation weights.
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-bold text-emerald-400">6 Live Cluster Constellations</span>
+                <p className="text-[10px] text-slate-500 uppercase">{profile.interaction_count} Events Recorded</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 relative aspect-[4/3] rounded-2xl border border-white/[0.08] bg-[#05060A] overflow-hidden flex items-center justify-center p-6 shadow-2xl">
+              <svg className="h-full w-full max-h-[480px]" viewBox="-200 -200 400 400">
+                <circle cx="0" cy="0" r="160" fill="none" stroke="rgba(255,255,255,0.04)" strokeDasharray="4 4" />
+                <circle cx="0" cy="0" r="110" fill="none" stroke="rgba(255,255,255,0.06)" />
+                <circle cx="0" cy="0" r="60" fill="none" stroke="rgba(255,255,255,0.08)" />
+
+                {universe.clusters.map((c, i) => {
+                  const next = universe.clusters[(i + 1) % universe.clusters.length];
+                  return (
+                    <line
+                      key={i}
+                      x1={c.x}
+                      y1={c.y}
+                      x2={next.x}
+                      y2={next.y}
+                      stroke="rgba(99, 102, 241, 0.25)"
+                      strokeWidth="1.5"
+                    />
+                  );
+                })}
+
+                {universe.clusters.map((c) => {
+                  const isSelected = selectedCluster?.id === c.id;
+                  const radius = 14 + (c.weight * 16);
+                  return (
+                    <g
+                      key={c.id}
+                      onClick={() => handleSelectCluster(c)}
+                      className="cursor-pointer transition-transform hover:scale-110"
+                    >
+                      <circle
+                        cx={c.x}
+                        cy={c.y}
+                        r={radius + (isSelected ? 14 : 8)}
+                        fill={c.color}
+                        opacity={isSelected ? "0.35" : "0.1"}
+                      />
+                      <circle
+                        cx={c.x}
+                        cy={c.y}
+                        r={radius}
+                        fill={c.color}
+                        stroke="#ffffff"
+                        strokeWidth={isSelected ? "3" : "0.5"}
+                        opacity="0.9"
+                      />
+                      <text
+                        x={c.x}
+                        y={c.y + radius + 14}
+                        textAnchor="middle"
+                        fill="#F1F5F9"
+                        fontSize="11"
+                        fontWeight="600"
+                      >
+                        {c.name}
+                      </text>
+                      <text
+                        x={c.x}
+                        y={c.y + 4}
+                        textAnchor="middle"
+                        fill="#ffffff"
+                        fontSize="10"
+                        fontWeight="bold"
+                      >
+                        {Math.round(c.weight * 100)}%
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+
+            <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 flex flex-col justify-between shadow-2xl">
+              <div>
+                <span className="text-[10px] font-bold tracking-widest text-indigo-400 uppercase">
+                  Active Constellation Focus
+                </span>
+                <h3 className="text-2xl font-bold text-white mt-1">
+                  {selectedCluster ? selectedCluster.name : "Select a Cluster"}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  {selectedCluster?.tagline || "Click any node on the left to inspect its orbital pull."}
+                </p>
+
+                <div className="mt-6 p-4 rounded-xl bg-white/[0.02] border border-white/[0.08]">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-semibold text-slate-300">Cluster Gravity Pull</span>
+                    <span className="text-xs font-bold text-indigo-400">{Math.round(clusterWeight * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1.0"
+                    step="0.05"
+                    value={clusterWeight}
+                    onChange={(e) => handleTuneSlider(Number(e.target.value))}
+                    className="w-full accent-indigo-500 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                    <span>Downweight</span>
+                    <span>Dominant Gravity</span>
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                    <span>Orbiting Master Titles</span>
+                    <span className="text-[10px] text-indigo-400">{selectedCluster?.orbit_titles?.length || 0} In Gravitational Pull</span>
+                  </h4>
+
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {selectedCluster?.orbit_titles?.map((orb) => (
+                      <div
+                        key={orb.content.content_id}
+                        onClick={() => onSelectTitle(orb.content)}
+                        className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.05] cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={orb.content.poster_path || orb.content.backdrop_path}
+                            alt=""
+                            className="h-9 w-6 object-cover rounded"
+                          />
+                          <div className="flex-1 min-w-0 pr-2">
+                            <h5 className="text-xs font-bold text-slate-200 line-clamp-2 leading-tight break-words">{orb.content.title}</h5>
+                            <span className="text-[10px] text-slate-400 mt-0.5 block">{orb.content.release_year} • {orb.content.genres?.[0]}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs font-bold text-emerald-400">{orb.personal_match_percentage}%</span>
+                          {orb.content.trailer_key && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onPlayTrailer(orb.content.trailer_key);
+                              }}
+                              className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-white font-semibold"
+                            >
+                              ▶
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-white/[0.08] text-[11px] text-slate-500 flex items-center justify-between">
+                <span>Model Calibration Version:</span>
+                <span className="font-bold text-slate-300">v2.1 Real-Time</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 5. MY PROFILE & WATCHLIST VIEW (NEW!) ---
+    function ProfileAndWatchlistView({ userProfile, tasteProfile, watchlist, isTrainingML, onTriggerMLTraining, onSelectTitle, onPlayTrailer, onToggleWatchlist, onOpenCalibration }) {
+      if (!userProfile || !tasteProfile) {
+        return <div className="text-center py-20 text-slate-400">Loading Profile...</div>;
+      }
+
+      return (
+        <div className="space-y-8">
+          {/* User Hero Card */}
+          <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 sm:p-8 shadow-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <img
+                  src={userProfile.avatar_url}
+                  alt={userProfile.username}
+                  className="h-20 w-20 rounded-2xl object-cover border-2 border-indigo-500/40 shadow-xl"
+                />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-white">{userProfile.username}</h1>
+                    <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
+                      Active Pioneer
+                    </span>
+                  </div>
+                  <p className="text-xs text-indigo-300 font-semibold mt-0.5">{userProfile.archetype_name}</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Overall Taste Calibration Alignment: <span className="text-emerald-400 font-bold">{userProfile.taste_alignment_score}%</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Stats Counters */}
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <span className="text-xl font-black text-white">{userProfile.total_hours_watched}h</span>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Watched</p>
+                </div>
+                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <span className="text-xl font-black text-indigo-400">{userProfile.titles_watched_count}</span>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Titles Done</p>
+                </div>
+                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <span className="text-xl font-black text-emerald-400">{watchlist.length}</span>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Watchlist</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions & ML Pipeline Trigger */}
+            <div className="mt-6 pt-4 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Intelligent Pipeline Status:</span>
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                  Continuous Online Learning Active
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={onTriggerMLTraining}
+                  disabled={isTrainingML}
+                  className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 px-4 py-2 text-xs font-bold text-emerald-300 shadow-lg transition-all flex items-center gap-1.5"
+                >
+                  <span>{isTrainingML ? "⏳ Analyzing & Re-training..." : "⚡ Run ML Re-training Loop"}</span>
+                </button>
+                <button
+                  onClick={onOpenCalibration}
+                  className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-bold text-white shadow-lg transition-colors"
+                >
+                  Switch Cinephile Archetype
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Watchlist Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white">Your Saved Watchlist ({watchlist.length})</h3>
+                <p className="text-xs text-slate-400">Curated by you for future viewing sessions</p>
+              </div>
+            </div>
+
+            {watchlist.length === 0 ? (
+              <div className="p-12 rounded-2xl border border-dashed border-white/10 text-center text-slate-400">
+                <p className="text-sm">Your watchlist is currently empty.</p>
+                <p className="text-xs text-slate-500 mt-1">Click the bookmark icon or "+ Add to Watchlist" on any title to save it here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                {watchlist.map((item) => (
+                  <MovieCardComponent
+                    key={item.content_id}
+                    item={{ content: item, personal_match_percentage: 95 }}
+                    isSaved={true}
+                    onSelect={onSelectTitle}
+                    onPlayTrailer={onPlayTrailer}
+                    onToggleWatchlist={onToggleWatchlist}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // --- 6. INTENT SEARCH VIEW (Section 34) ---
+    function SearchView({ watchlist, onSelectTitle, onPlayTrailer, onToggleWatchlist }) {
+      const [query, setQuery] = useState("a Korean thriller with a satisfying ending");
+      const [loading, setLoading] = useState(false);
+      const [data, setData] = useState(null);
+
+      const handleSearch = async (qText) => {
+        const active = qText || query;
+        if (!active.trim()) return;
+        setLoading(true);
+        try {
+          const res = await fetch(`${API_BASE}/search?query=${encodeURIComponent(active)}`, { method: "POST" });
+          setData(await res.json());
+        } catch (e) {
+          console.error(e);
+        }
+        setLoading(false);
+      };
+
+      return (
+        <div className="space-y-8">
+          <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 sm:p-8">
+            <h1 className="text-3xl font-extrabold text-white">Natural Search</h1>
+            <p className="mt-1 text-sm text-slate-400 max-w-2xl leading-relaxed">
+              Ask for cinematic qualities, emotional tones, negative constraints, and thematic comparisons rather than keywords.
+            </p>
+
+            <div className="mt-6 flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className="w-full rounded-xl border border-white/10 bg-[#05060A] px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              />
+              <button
+                onClick={() => handleSearch()}
+                disabled={loading}
+                className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors"
+              >
+                {loading ? "Parsing..." : "Search"}
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-500">Try:</span>
+              {[
+                "a Korean thriller with a satisfying ending",
+                "something like Dark but less confusing",
+                "Christopher Nolan masterpieces",
+                "90 minute mystery with atmosphere",
+                "comforting movie for two people"
+              ].map((sample, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setQuery(sample);
+                    handleSearch(sample);
+                  }}
+                  className="rounded-lg bg-white/[0.04] px-2.5 py-1 text-xs text-slate-300 hover:bg-white/[0.08] border border-white/[0.06]"
+                >
+                  "{sample}"
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {data?.parsed_intent && (
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-4">
+              <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">
+                Understood Structured Intent
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {data.parsed_intent.mood && (
+                  <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-indigo-300 border border-indigo-500/30">
+                    Mood: {data.parsed_intent.mood}
+                  </span>
+                )}
+                {data.parsed_intent.max_runtime && (
+                  <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-indigo-300 border border-indigo-500/30">
+                    Runtime: ≤ {data.parsed_intent.max_runtime} min
+                  </span>
+                )}
+                {data.parsed_intent.preferred_regions?.length > 0 && (
+                  <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-emerald-300 border border-emerald-500/30">
+                    Region: {data.parsed_intent.preferred_regions.join(", ")}
+                  </span>
+                )}
+                {data.parsed_intent.avoid_tags?.length > 0 && (
+                  <span className="rounded-full bg-rose-500/20 px-3 py-1 text-rose-300 border border-rose-500/30">
+                    Negative Filter: Avoid {data.parsed_intent.avoid_tags.join(", ")}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {data?.results && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {data.results.map((item) => (
+                <MovieCardComponent
+                  key={item.content.content_id}
+                  item={item}
+                  isSaved={watchlist.some(w => w.content_id === item.content.content_id)}
+                  onSelect={onSelectTitle}
+                  onPlayTrailer={onPlayTrailer}
+                  onToggleWatchlist={onToggleWatchlist}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // --- 7. MOVIE CARD COMPONENT (Flagship Theater Aesthetic) ---
+    function MovieCardComponent({ item, isSaved, onSelect, onPlayTrailer, onToggleWatchlist }) {
+      const content = item.content;
+      const matchPct = item.personal_match_percentage || 88;
+      const reason = item.reasons?.[0] || "Strong narrative overlap with your profile";
+      const imageSrc = content.backdrop_path || content.poster_path;
+      const rating = content.vote_average ? content.vote_average.toFixed(1) : null;
+      const countryCode = content.origin_countries?.[0] || (content.original_language === 'hi' ? 'IN' : null);
+
+      return (
+        <div
+          onClick={() => onSelect(content)}
+          className="group flex flex-col overflow-hidden rounded-2xl glass-card hover:border-amber-400/50 hover:shadow-2xl hover:shadow-indigo-500/20 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer justify-between"
+        >
+          <div className="relative aspect-video w-full overflow-hidden bg-slate-900">
+            <img
+              src={imageSrc}
+              alt={content.title}
+              className="h-full w-full object-cover group-hover:scale-108 transition-transform duration-700 ease-out"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#070913] via-transparent to-black/30" />
+            
+            {/* Top Bar with Match and Rating */}
+            <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+              {rating && (
+                <div className="rounded-full bg-black/85 backdrop-blur-md px-2 py-0.5 border border-amber-400/40 text-[10px] font-extrabold text-amber-300 flex items-center gap-1 shadow-lg">
+                  <span>★</span>
+                  <span>{rating}</span>
+                </div>
+              )}
+              <div className="rounded-full bg-black/85 backdrop-blur-md px-2 py-0.5 border border-emerald-500/40 text-[10px] font-extrabold text-emerald-400 shadow-lg">
+                {matchPct}%
+              </div>
+            </div>
+
+            {/* Quick Watchlist Bookmark Icon */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleWatchlist(content.content_id, content.title);
+              }}
+              className={`absolute top-2.5 left-2.5 h-7 w-7 rounded-full flex items-center justify-center backdrop-blur-md border transition-all shadow-lg ${
+                isSaved ? "bg-amber-400 text-black border-amber-300 scale-110" : "bg-black/70 text-white border-white/20 hover:bg-black/90 hover:scale-110"
+              }`}
+            >
+              ★
+            </button>
+
+            {/* Quick Play Trailer Button (Plays trailer or searches online trailer preview) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (content.trailer_key) {
+                  onPlayTrailer(content.trailer_key);
+                } else {
+                  // Open YouTube search preview in modal or window
+                  window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(content.title + ' official trailer')}`, '_blank');
+                }
+              }}
+              className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 px-3 py-1 text-[11px] font-black text-black shadow-xl border border-amber-300/40 transition-all opacity-0 group-hover:opacity-100 hover:scale-105"
+            >
+              <span>▶ Trailer</span>
+            </button>
+
+            {countryCode && (
+              <div className="absolute bottom-2.5 right-2.5 text-[10px] font-bold text-slate-300/80 bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-sm">
+                {countryCode === 'IN' ? '🇮🇳 IN' : countryCode === 'KR' ? '🇰🇷 KR' : countryCode === 'JP' ? '🇯🇵 JP' : countryCode}
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 flex flex-1 flex-col justify-between gap-3">
+            <div>
+              <div className="flex justify-between items-start gap-2">
+                <h4 className="font-extrabold text-sm sm:text-base text-white group-hover:text-amber-300 transition-colors line-clamp-2 leading-snug break-words flex-1">
+                  {content.title}
+                </h4>
+                {content.release_year && (
+                  <span className="text-[11px] font-bold text-slate-400 bg-white/[0.05] px-2 py-0.5 rounded-md shrink-0 border border-white/[0.05]">
+                    {content.release_year}
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-indigo-200/80 italic line-clamp-2 leading-relaxed">
+                "{reason}"
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-slate-400">
+              <span className="font-medium">
+                {content.runtime ? `${content.runtime} min` : 'Feature'} • {content.genres?.[0] || 'Drama'}
+              </span>
+              <span className="text-amber-400 font-extrabold group-hover:text-amber-300 flex items-center gap-1 group-hover:translate-x-0.5 transition-all">
+                <span>Story & Why</span>
+                <span className="text-xs">→</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 8. VIDEO TRAILER THEATER MODAL ---
+    function TrailerTheaterModal({ trailerKey, onClose }) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl">
+          <div className="relative w-full max-w-5xl rounded-2xl overflow-hidden border border-white/15 bg-black shadow-2xl">
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 z-20 h-10 w-10 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center border border-white/20"
+            >
+              ✕
+            </button>
+            <div className="aspect-video w-full">
+              <iframe
+                src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&rel=0&modestbranding=1`}
+                title="Official Trailer"
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 9. WHY MODAL WITH STORY CARD & GALLERY TABS ---
+    function WhyModal({ content, isSaved, onClose, onPlayTrailer, onToggleWatchlist, onEventLogged }) {
+      const [modalTab, setModalTab] = useState("why"); // "why", "story", "gallery", "cast"
+      const prof = content.profile;
+      const story = content.story_card;
+
+      const logEvent = async (type, label) => {
+        try {
+          await fetch(`${API_BASE}/events`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: "default_user", content_id: content.content_id, event_type: type })
+          });
+          onEventLogged(label);
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-black/85 backdrop-blur-md">
+          <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-surface border border-white/[0.12] shadow-2xl">
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 z-20 h-9 w-9 rounded-full bg-black/60 text-slate-300 hover:text-white flex items-center justify-center border border-white/10"
+            >
+              ✕
+            </button>
+
+            {/* Backdrop Hero */}
+            <div className="relative aspect-[21/9] w-full overflow-hidden">
+              <img src={content.backdrop_path || content.poster_path} alt={content.title} className="h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/60 to-transparent" />
+              
+              <div className="absolute bottom-6 left-6 right-6">
+                <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/30">
+                  94% Personal Match
+                </span>
+                <h2 className="text-3xl font-bold text-white mt-2">{content.title}</h2>
+                {content.tagline && <p className="text-xs text-slate-400 italic">"{content.tagline}"</p>}
+
+                {/* Event Actions */}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {content.trailer_key && (
+                    <button
+                      onClick={() => onPlayTrailer(content.trailer_key)}
+                      className="rounded-lg bg-white text-slate-950 px-4 py-2 text-xs font-bold hover:bg-slate-200"
+                    >
+                      ▶ Watch Trailer
+                    </button>
+                  )}
+                  <button
+                    onClick={() => logEvent("WATCH_COMPLETE", "Marked as Watched")}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500"
+                  >
+                    Watch Now
+                  </button>
+                  <button
+                    onClick={onToggleWatchlist}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                      isSaved ? "bg-amber-500 text-black border-amber-400" : "bg-white/5 border-white/15 text-slate-200 hover:bg-white/10"
+                    }`}
+                  >
+                    {isSaved ? "★ In Watchlist" : "+ Add to Watchlist"}
+                  </button>
+                  <button
+                    onClick={() => logEvent("DISLIKE", "Calibrated (Disliked)")}
+                    className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-slate-200 hover:bg-white/10"
+                  >
+                    Not For Me
+                  </button>
+                  <button
+                    onClick={() => logEvent("ABANDON", "Recorded Abandonment")}
+                    className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 hover:bg-rose-500/20"
+                  >
+                    Abandoned
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Internal Navigation Tabs */}
+            <div className="flex border-b border-white/[0.08] px-6 bg-white/[0.02]">
+              {[
+                { id: "why", label: "Why It Matches You" },
+                { id: "story", label: "Story & Narrative Arc" },
+                { id: "cast", label: "Cast & Directors" },
+                { id: "gallery", label: "Visual Stills Gallery" },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setModalTab(tab.id)}
+                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-all ${
+                    modalTab === tab.id
+                      ? "border-indigo-500 text-white"
+                      : "border-transparent text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Modal Content Sections */}
+            <div className="p-6 space-y-6">
+              
+              {/* TAB 1: WHY IT MATCHES YOU */}
+              {modalTab === "why" && (
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase">Premise</h4>
+                    <p className="mt-1 text-sm text-slate-300 leading-relaxed">{content.overview}</p>
+                  </div>
+
+                  <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+                    <h4 className="text-xs font-bold text-indigo-400 uppercase mb-3">Why It Matches You</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div className="flex justify-between border-b border-white/[0.06] pb-2">
+                        <span className="text-slate-400">Your Taste: Slow-burn pacing</span>
+                        <span className="font-semibold text-slate-200">Deliberate unhurried build</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/[0.06] pb-2">
+                        <span className="text-slate-400">Your Taste: Mystery</span>
+                        <span className="font-semibold text-slate-200">High investigation payoff</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/[0.06] pb-2">
+                        <span className="text-slate-400">Your Taste: Character depth</span>
+                        <span className="font-semibold text-slate-200">Morally ambiguous characters</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/[0.06] pb-2">
+                        <span className="text-slate-400">Your Taste: World-building</span>
+                        <span className="font-semibold text-slate-200">High atmosphere immersion</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {prof && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">Audience Reaction Spectrum</h4>
+                        <div className="space-y-2.5">
+                          {Object.entries(prof.audience_reaction).map(([k, v]) => (
+                            <div key={k} className="space-y-1">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-slate-300">{k}</span>
+                                <span className="font-semibold text-indigo-400">{v}%</span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-slate-800">
+                                <div className="h-full rounded-full bg-indigo-500" style={{ width: `${v}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 flex flex-col justify-between">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">What Viewers Loved</h4>
+                          <div className="grid grid-cols-2 gap-2 text-xs mb-4">
+                            <div className="bg-white/[0.03] p-2 rounded flex justify-between">
+                              <span className="text-slate-400">Atmosphere</span>
+                              <span className="font-bold text-emerald-400">{prof.aspect_breakdown.atmosphere}%</span>
+                            </div>
+                            <div className="bg-white/[0.03] p-2 rounded flex justify-between">
+                              <span className="text-slate-400">Characters</span>
+                              <span className="font-bold text-emerald-400">{prof.aspect_breakdown.characters}%</span>
+                            </div>
+                            <div className="bg-white/[0.03] p-2 rounded flex justify-between">
+                              <span className="text-slate-400">Story</span>
+                              <span className="font-bold text-emerald-400">{prof.aspect_breakdown.story}%</span>
+                            </div>
+                            <div className="bg-white/[0.03] p-2 rounded flex justify-between">
+                              <span className="text-slate-400">Acting</span>
+                              <span className="font-bold text-emerald-400">{prof.aspect_breakdown.acting}%</span>
+                            </div>
+                          </div>
+
+                          <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">What Divided Viewers</h4>
+                          <div className="flex gap-2 text-xs">
+                            <span className="rounded bg-amber-500/10 px-2 py-1 text-amber-300 border border-amber-500/20">
+                              Pacing: {prof.aspect_breakdown.pacing_rating}%
+                            </span>
+                            <span className="rounded bg-amber-500/10 px-2 py-1 text-amber-300 border border-amber-500/20">
+                              Ending: {prof.aspect_breakdown.ending_satisfaction}%
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-white/[0.06] text-xs text-slate-400 italic">
+                          "{prof.audience_voice_summary}"
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: STORY CARD & NARRATIVE ARC (NEW!) */}
+              {modalTab === "story" && story && (
+                <div className="space-y-6">
+                  <div className="p-4 rounded-xl border border-indigo-500/30 bg-indigo-950/20">
+                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Thematic Pillars</span>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {story.thematic_pillars.map((th, i) => (
+                        <span key={i} className="px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-xs font-semibold text-indigo-200">
+                          ✦ {th}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 3-Act Structure Arc */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Narrative Structure Arc</h4>
+                    
+                    <div className="space-y-3">
+                      <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.08]">
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase">Act I: Opening Hook</span>
+                        <p className="text-xs text-slate-200 mt-1">{story.opening_hook}</p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.08]">
+                        <span className="text-[10px] font-bold text-amber-400 uppercase">Act II: Midpoint Escalation</span>
+                        <p className="text-xs text-slate-200 mt-1">{story.midpoint_escalation}</p>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.08]">
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase">Act III: Climax & Resolution Payoff</span>
+                        <p className="text-xs text-slate-200 mt-1">{story.climax_payoff}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {story.notable_dialogue && (
+                    <div className="p-4 rounded-xl bg-white/[0.02] border-l-4 border-indigo-500 italic text-sm text-slate-200">
+                      {story.notable_dialogue}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: CAST & DIRECTORS */}
+              {modalTab === "cast" && (
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">Visionary Directors & Writers</h4>
+                    <div className="flex flex-wrap gap-3">
+                      {content.directors?.map((d, i) => (
+                        <div key={i} className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08]">
+                          <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white">
+                            {d.charAt(0)}
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white block">{d}</span>
+                            <span className="text-[10px] text-indigo-400">Director</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">Primary Cast Members</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {(content.cast_detail?.length > 0 ? content.cast_detail : content.cast?.map(n => ({ name: n, character: 'Star', profile_path: null })))?.slice(0, 8).map((actor, i) => (
+                        <div key={i} className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.08] text-center hover:border-indigo-400/40 transition-all group">
+                          {actor.profile_path ? (
+                            <img
+                              src={actor.profile_path}
+                              alt={actor.name}
+                              className="h-16 w-16 mx-auto rounded-full object-cover object-top mb-2 border-2 border-indigo-500/30 group-hover:scale-105 transition-transform shadow-md"
+                            />
+                          ) : (
+                            <div className="h-16 w-16 mx-auto rounded-full bg-slate-800 flex items-center justify-center font-bold text-sm text-slate-300 mb-2 border border-white/10">
+                              {actor.name.charAt(0)}
+                            </div>
+                          )}
+                          <span className="text-xs font-bold text-slate-100 block line-clamp-2 leading-tight break-words">{actor.name}</span>
+                          <span className="text-[10px] text-indigo-300/80 block mt-1 line-clamp-2 leading-tight break-words">{actor.character || "Star"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: VISUAL STILLS GALLERY (NEW!) */}
+              {modalTab === "gallery" && (
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase">High-Resolution Cinematic Stills</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {content.gallery_images?.length > 0 ? (
+                      content.gallery_images.map((imgUrl, i) => (
+                        <div key={i} className="rounded-xl overflow-hidden border border-white/10 aspect-video bg-slate-900 shadow-lg">
+                          <img src={imgUrl} alt="Cinematic Still" className="h-full w-full object-cover hover:scale-105 transition-transform duration-500" />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-2 text-center py-10 text-slate-500 text-xs">
+                        No additional backdrops available in feed.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Available on Providers */}
+              <div className="flex items-center justify-between border-t border-white/[0.08] pt-4 text-xs">
+                <span className="text-slate-400">Available on:</span>
+                <div className="flex gap-2">
+                  {content.providers?.length > 0 ? (
+                    content.providers.map((p) => (
+                      <span key={p.provider_id} className="rounded bg-white/5 border border-white/10 px-2.5 py-1 text-indigo-300 font-semibold">
+                        {p.provider_name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-slate-500">Checking global provider catalog...</span>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 10. TASTE CALIBRATION & ARCHETYPE MODAL ---
+    function TasteCalibrationModal({ onClose, onArchetypeSelected }) {
+      const archetypes = [
+        {
+          id: "cerebral",
+          name: "The Cerebral Philosopher",
+          tagline: "Mind-bending Sci-Fi, non-linear puzzles, existential mystery",
+          hallmarks: ["Interstellar", "Arrival", "Dark", "Memento"],
+          color: "from-indigo-600 to-blue-700"
+        },
+        {
+          id: "comfort",
+          name: "The Wholesome Cozy Seeker",
+          tagline: "Gentle humor, heartwarming charm, zero anxiety, visual whimsy",
+          hallmarks: ["Paddington 2", "Spirited Away", "Amélie", "Grand Budapest"],
+          color: "from-amber-500 to-orange-600"
+        },
+        {
+          id: "adrenaline",
+          name: "The Pure Adrenaline Junkie",
+          tagline: "High-octane action, kinetic stuntcraft, relentless momentum",
+          hallmarks: ["Mad Max", "John Wick", "Top Gun", "The Dark Knight"],
+          color: "from-rose-600 to-red-700"
+        },
+        {
+          id: "emotional",
+          name: "The Emotional Humanist",
+          tagline: "Poignant character studies, profound love, tearjerking drama",
+          hallmarks: ["Past Lives", "Portrait of a Lady on Fire", "Manchester by the Sea"],
+          color: "from-purple-600 to-pink-700"
+        },
+        {
+          id: "international",
+          name: "The Global Auteur Explorer",
+          tagline: "Bong Joon-ho, Park Chan-wook, French and Japanese cinematic craft",
+          hallmarks: ["Parasite", "Memories of Murder", "Decision to Leave"],
+          color: "from-teal-600 to-emerald-700"
+        }
+      ];
+
+      const handleChoose = async (arch) => {
+        try {
+          await fetch(`${API_BASE}/profile/archetype`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ archetype: arch.id })
+          });
+          onArchetypeSelected(arch.name);
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-black/85 backdrop-blur-md">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-surface border border-white/[0.12] p-6 sm:p-8 shadow-2xl">
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 h-8 w-8 rounded-full bg-white/10 text-white flex items-center justify-center"
+            >
+              ✕
+            </button>
+
+            <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+              Machine Learning Calibration
+            </span>
+            <h2 className="text-2xl font-extrabold text-white mt-1">Select Your Cinephile Archetype</h2>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              Choosing an archetype instantly recalibrates your 20-dimensional taste vector, shifts your Taste Universe constellations, and re-ranks your discovery deck.
+            </p>
+
+            <div className="mt-6 space-y-3">
+              {archetypes.map((arch) => (
+                <div
+                  key={arch.id}
+                  onClick={() => handleChoose(arch)}
+                  className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.08] hover:border-indigo-500/40 cursor-pointer transition-all gap-3"
+                >
+                  <div>
+                    <h3 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
+                      {arch.name}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">{arch.tagline}</p>
+                    <div className="flex gap-2 mt-2">
+                      {arch.hallmarks.map((h, i) => (
+                        <span key={i} className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-slate-300">
+                          {h}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button className="shrink-0 rounded-lg bg-indigo-600 group-hover:bg-indigo-500 px-3.5 py-2 text-xs font-bold text-white shadow">
+                    Select & Calibrate
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 11. USER AUTHENTICATION MODAL (SIGN IN / REGISTER) ---
+    function AuthModal({ onClose, onSuccess }) {
+      const [isLoginMode, setIsLoginMode] = useState(true);
+      const [username, setUsername] = useState("");
+      const [email, setEmail] = useState("");
+      const [password, setPassword] = useState("");
+      const [error, setError] = useState(null);
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError(null);
+        setLoading(true);
+
+        const endpoint = isLoginMode ? `${API_BASE}/auth/login` : `${API_BASE}/auth/register`;
+        const payload = isLoginMode
+          ? { username_or_email: username, password }
+          : { username, email, password };
+
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setError(data.detail || "Authentication failed. Check credentials.");
+          } else {
+            onSuccess(data.user);
+          }
+        } catch (err) {
+          setError("Network or server connection error.");
+        }
+        setLoading(false);
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-black/90 backdrop-blur-md">
+          <div className="relative w-full max-w-md rounded-3xl bg-surface border border-white/[0.12] p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-60 h-60 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all"
+            >
+              ✕
+            </button>
+
+            <div className="flex items-center gap-2 mb-1">
+              <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-[10px] font-black tracking-widest text-amber-400 uppercase">
+                Secure Preference Identity
+              </span>
+            </div>
+            <h2 className="text-2xl font-black text-white">
+              {isLoginMode ? "Sign In to Your Taste Profile" : "Create Taste Profile"}
+            </h2>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              {isLoginMode
+                ? "Access your personalized 20-dimensional preference vector, saved watchlist, and custom calibrated archetypes."
+                : "Join the platform to track and continuously train machine learning models on your viewing behavior."}
+            </p>
+
+            {error && (
+              <div className="mt-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs font-semibold text-rose-300">
+                ⚠ {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="mt-5 space-y-4 relative z-10">
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  {isLoginMode ? "Username or Email" : "Choose Username"}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder={isLoginMode ? "e.g. Cinephile Pioneer or user@example.com" : "e.g. film_buff_99"}
+                  className="w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {!isLoginMode && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="user@example.com"
+                    className="w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none transition-colors"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 py-3 text-xs font-black text-slate-950 shadow-xl shadow-amber-500/20 transition-all hover:scale-102 disabled:opacity-50"
+              >
+                {loading ? "Authenticating..." : (isLoginMode ? "Sign In & Load Vectors" : "Create Profile & Train Model")}
+              </button>
+            </form>
+
+            <div className="mt-5 pt-4 border-t border-white/[0.08] text-center">
+              <button
+                onClick={() => { setIsLoginMode(!isLoginMode); setError(null); }}
+                className="text-xs text-indigo-300 hover:text-white font-semibold transition-colors"
+              >
+                {isLoginMode ? "Don't have an account? Sign Up Free →" : "Already have an account? Sign In →"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
