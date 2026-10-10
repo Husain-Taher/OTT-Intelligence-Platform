@@ -183,6 +183,19 @@ def init_db():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pick_feedback_user ON pick_feedback(user_id, id DESC);")
 
+    # History of items presented to user across rolls/sessions
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS shown_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        content_id TEXT NOT NULL,
+        mood TEXT,
+        session_id TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_shown_history_user ON shown_history(user_id, id DESC);")
+
     conn.commit()
     conn.close()
 
@@ -669,7 +682,7 @@ def get_all_pick_feedback() -> List[Dict[str, Any]]:
 
 
 def delete_user_data(user_id: str) -> None:
-    """Removes all data associated with a user: profile, taste, events, watchlist, checkins, mood affinity, feedback."""
+    """Removes all data associated with a user: profile, taste, events, watchlist, checkins, mood affinity, feedback, shown history."""
     conn = get_connection()
     tables = [
         "profiles",
@@ -679,10 +692,44 @@ def delete_user_data(user_id: str) -> None:
         "mood_checkins",
         "user_mood_affinity",
         "pick_feedback",
+        "shown_history",
     ]
     for tbl in tables:
         conn.execute(f"DELETE FROM {tbl} WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
+
+
+def log_shown_history(user_id: str, content_ids: List[str], mood: Optional[str] = None, session_id: Optional[str] = None) -> None:
+    """Records that these content_ids were presented to user in the given mood/session."""
+    if not content_ids:
+        return
+    conn = get_connection()
+    cur = conn.cursor()
+    for cid in content_ids:
+        cur.execute("""
+            INSERT INTO shown_history (user_id, content_id, mood, session_id)
+            VALUES (?, ?, ?, ?)
+        """, (user_id, cid, mood, session_id))
+    conn.commit()
+    conn.close()
+
+
+def get_recent_shown_counts(user_id: str, limit: int = 50) -> Dict[str, int]:
+    """Returns frequency of content_ids shown to user across the most recent `limit` presentations."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT content_id, COUNT(*) as cnt
+        FROM (
+            SELECT content_id FROM shown_history
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+        )
+        GROUP BY content_id
+    """, (user_id, limit)).fetchall()
+    conn.close()
+    return {r[0]: r[1] for r in rows}
+
 
 

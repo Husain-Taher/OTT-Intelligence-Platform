@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clapperboard, Info } from "lucide-react";
+import { Clapperboard, Info, Play, X } from "lucide-react";
 import MovieCard from "./MovieCard";
 import MoodDimmer from "./MoodDimmer";
 import { fetchDiscoveryDeck } from "@/lib/api";
@@ -36,6 +36,7 @@ export default function DiscoveryHomeView({ onSelectTitle, onOpenStudio }: Props
   const { me } = useMe();
   const [deck, setDeck] = useState<DiscoveryDeck | null>(null);
   const [loading, setLoading] = useState(true);
+  const [playingTrailer, setPlayingTrailer] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -81,14 +82,43 @@ export default function DiscoveryHomeView({ onSelectTitle, onOpenStudio }: Props
               <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10">
                 <p className="text-sm text-gel-300">{theme ? `Tonight's top pick for a ${theme.label.toLowerCase()} mood` : learning ? "A strong place to start" : "Top pick for your taste"}</p>
                 <h2 className="mt-1 font-display text-4xl font-semibold text-ivory sm:text-6xl">{hero.content.title}</h2>
+                {hero.content.tagline && (
+                  <p className="mt-2 font-display text-sm italic text-gel-300 sm:text-base">"{hero.content.tagline}"</p>
+                )}
                 <p className="mt-3 line-clamp-2 max-w-2xl text-ivory/75">{hero.content.overview}</p>
                 <div className="mt-5 flex flex-wrap items-center gap-4">
                   <button onClick={() => onSelectTitle(hero.content, hero.personal_match_percentage)} className="flex items-center gap-2 rounded-full bg-gel-500 px-6 py-3 text-sm font-semibold text-pit hover:bg-gel-400">
                     <Info className="h-4 w-4" /> Why should I watch this?
                   </button>
+                  {hero.content.trailer_key && (
+                    <button
+                      onClick={() => setPlayingTrailer(true)}
+                      className="flex items-center gap-2 rounded-full border border-gel-400/60 bg-gel-500/10 px-5 py-3 text-sm font-semibold text-gel-300 hover:bg-gel-500/20"
+                    >
+                      <Play className="h-4 w-4 fill-current" /> Watch trailer
+                    </button>
+                  )}
                   {!learning && <span className="text-sm text-ivory/70">{hero.personal_match_percentage}% match</span>}
                 </div>
               </div>
+
+              {playingTrailer && hero.content.trailer_key && (
+                <div className="absolute inset-0 z-30 flex flex-col bg-black">
+                  <div className="flex items-center justify-between border-b border-white/10 bg-pit/90 px-4 py-2">
+                    <span className="font-display text-xs text-ivory">{hero.content.title} - Official Trailer</span>
+                    <button onClick={() => setPlayingTrailer(false)} className="flex items-center gap-1 text-xs text-ivory/70 hover:text-ivory">
+                      <X className="h-4 w-4" /> Close
+                    </button>
+                  </div>
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed/${hero.content.trailer_key}?autoplay=1`}
+                    title={`${hero.content.title} trailer`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="h-full w-full border-0"
+                  />
+                </div>
+              )}
             </div>
           </section>
 

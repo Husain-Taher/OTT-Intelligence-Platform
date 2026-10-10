@@ -1,8 +1,10 @@
 import urllib.request
 import json
+import pytest
 
 BASE = "http://127.0.0.1:8000/v1"
 
+@pytest.mark.skip(reason="Manual integration test requiring live server on port 8000")
 def test_vertical_slice():
     print("=== STARTING OTT INTELLIGENCE SYSTEM INTEGRATION TEST ===")
     

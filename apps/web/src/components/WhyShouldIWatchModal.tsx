@@ -16,6 +16,7 @@ interface WhyModalProps {
 
 export default function WhyShouldIWatchModal({ content, onClose, onEventLogged, matchPct, moodLabel }: WhyModalProps) {
   const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
+  const [playingTrailer, setPlayingTrailer] = useState(false);
 
   if (!content) return null;
 
@@ -74,6 +75,15 @@ export default function WhyShouldIWatchModal({ content, onClose, onEventLogged, 
 
             {/* Quick Actions */}
             <div className="mt-4 flex flex-wrap items-center gap-2.5">
+              {content.trailer_key && (
+                <button
+                  onClick={() => setPlayingTrailer(true)}
+                  className="flex items-center gap-2 rounded-lg bg-gel-500 px-4 py-2 text-xs font-semibold text-pit shadow-lg hover:bg-gel-400 transition-colors"
+                >
+                  <Play className="h-4 w-4 fill-current" />
+                  <span>Watch Trailer</span>
+                </button>
+              )}
               <button
                 onClick={() => handleAction("WATCH_COMPLETE", "Marked as Watched")}
                 className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-indigo-500 transition-colors"
@@ -111,6 +121,24 @@ export default function WhyShouldIWatchModal({ content, onClose, onEventLogged, 
               </div>
             )}
           </div>
+
+          {playingTrailer && content.trailer_key && (
+            <div className="absolute inset-0 z-30 flex flex-col bg-black">
+              <div className="flex items-center justify-between border-b border-white/10 bg-pit/90 px-4 py-2">
+                <span className="font-display text-xs text-ivory">{content.title} - Official Trailer</span>
+                <button onClick={() => setPlayingTrailer(false)} className="flex items-center gap-1 text-xs text-ivory/70 hover:text-ivory">
+                  <X className="h-4 w-4" /> Close
+                </button>
+              </div>
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${content.trailer_key}?autoplay=1`}
+                title={`${content.title} trailer`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="h-full w-full border-0"
+              />
+            </div>
+          )}
         </div>
 
         {/* Content Body Grid */}

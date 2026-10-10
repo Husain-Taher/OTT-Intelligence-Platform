@@ -15,7 +15,7 @@ from app.db.database import (
     get_profile_row, update_profile, log_mood_checkin, get_recent_checkins,
     get_checkin_counts, add_mood_affinity, get_mood_affinity, mood_genre_overlay,
     get_user_activity_stats, get_watchlist, save_pick_feedback, get_all_pick_feedback,
-    delete_user_data
+    delete_user_data, log_shown_history, get_recent_shown_counts
 )
 from app.auth.auth0 import AuthUser, get_current_user
 from app.moods import MOODS, normalize_mood, catalog as mood_catalog
@@ -348,15 +348,22 @@ def find_my_watch(
         log_mood_checkin(user_id, canonical_mood, genres or [], energy, max_runtime, intent.novelty)
 
     exclude_set = set(exclude_ids or [])
+    shown_counts = get_recent_shown_counts(user_id, limit=50)
 
     generator = CandidateGenerator(engine)
     candidates = generator.generate_candidates(all_items, taste, intent, seen_content_ids=exclude_set)
-    ranked = MultiStageRanker.rank_and_diversify(candidates, taste, intent, top_n=5, exclude_content_ids=exclude_set)
+    ranked = MultiStageRanker.rank_and_diversify(
+        candidates, taste, intent, top_n=5, exclude_content_ids=exclude_set, shown_counts=shown_counts
+    )
 
     if not ranked:
         # Fallback to general candidates
         candidates = [(i, {"semantic_score": 0.5}) for i in all_items if i.content_id not in exclude_set]
-        ranked = MultiStageRanker.rank_and_diversify(candidates, taste, intent, top_n=5)
+        ranked = MultiStageRanker.rank_and_diversify(candidates, taste, intent, top_n=5, shown_counts=shown_counts)
+
+    # Record shown history for newly presented titles
+    presented_ids = [r[0].content_id for r in ranked]
+    log_shown_history(user_id, presented_ids, mood=canonical_mood or intent.mood)
 
     hero_item, hero_score, hero_pct, hero_breakdown, hero_reasons, hero_diffs, hero_note = ranked[0]
     runners_up = []
@@ -424,7 +431,8 @@ def get_discovery_deck(
         # Mood-aware deck: the whole lobby re-tunes to how the user feels right now
         m_intent = RecommendationIntent(mood=canonical_mood, novelty=0.5)
         cands = generator.generate_candidates(all_items, taste, m_intent)
-        ranked_m = MultiStageRanker.rank_and_diversify(cands, taste, m_intent, top_n=7)
+        shown_counts = get_recent_shown_counts(user_id, limit=30)
+        ranked_m = MultiStageRanker.rank_and_diversify(cands, taste, m_intent, top_n=7, shown_counts=shown_counts)
         mood_picks = [_to_item(r) for r in ranked_m]
         top_candidates = [mp.content for mp in mood_picks[:1]] or top_candidates
 

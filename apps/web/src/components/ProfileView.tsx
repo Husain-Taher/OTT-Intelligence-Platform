@@ -90,7 +90,10 @@ export default function ProfileView({
             <h1 className="font-display text-2xl font-semibold text-ivory">{me.display_name}</h1>
             {me.member_since && <p className="mt-1 text-xs text-ivory/50">Member since {new Date(me.member_since.replace(" ", "T") + "Z").toLocaleDateString(undefined, { month: "long", year: "numeric" })}</p>}
           </div>
-          <a href="/api/auth/logout" className="text-sm text-ivory/55 underline-offset-4 hover:text-ivory hover:underline">Sign out</a>
+          <div className="flex flex-col items-center gap-1.5">
+            <a href="/api/auth/logout" className="text-sm text-ivory/55 underline-offset-4 hover:text-ivory hover:underline">Sign out</a>
+            <a href="/credits" className="text-xs text-ivory/40 underline-offset-4 hover:text-gel-300 hover:underline">Credits & Attribution</a>
+          </div>
         </div>
 
         <div className="space-y-7 p-8">

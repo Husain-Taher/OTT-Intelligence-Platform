@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Bookmark, BookmarkCheck, Clapperboard, Heart, RefreshCw, Info, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Bookmark, BookmarkCheck, Clapperboard, Heart, RefreshCw, Info, ThumbsUp, ThumbsDown, Play, X } from "lucide-react";
 import MoodDimmer from "./MoodDimmer";
 import MovieCard from "./MovieCard";
 import { useMood } from "@/context/MoodContext";
@@ -48,6 +48,7 @@ export default function MoodStudio({ onSelectTitle }: { onSelectTitle: (c: Canon
   const [liked, setLiked] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [playingTrailer, setPlayingTrailer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -289,6 +290,9 @@ export default function MoodStudio({ onSelectTitle }: { onSelectTitle: (c: Canon
                       {hero.content.genres.slice(0, 3).map((g) => <span key={g}>{g}</span>)}
                     </div>
                     <h2 className="mt-2 font-display text-4xl font-semibold leading-none text-ivory sm:text-6xl">{hero.content.title}</h2>
+                    {hero.content.tagline && (
+                      <p className="mt-2 font-display text-sm italic text-gel-300 sm:text-base">"{hero.content.tagline}"</p>
+                    )}
                     <p className="mt-4 line-clamp-3 max-w-xl text-sm leading-relaxed text-ivory/75 sm:text-base">{hero.content.overview}</p>
                   </div>
                   <div className="shrink-0 text-left lg:text-right">
@@ -296,6 +300,24 @@ export default function MoodStudio({ onSelectTitle }: { onSelectTitle: (c: Canon
                     <div className="text-sm text-ivory/65">match for a {theme.label.toLowerCase()} night</div>
                   </div>
                 </div>
+
+                {playingTrailer && hero.content.trailer_key && (
+                  <div className="absolute inset-0 z-30 flex flex-col bg-black">
+                    <div className="flex items-center justify-between border-b border-white/10 bg-pit/90 px-4 py-2">
+                      <span className="font-display text-xs text-ivory">{hero.content.title} - Official Trailer</span>
+                      <button onClick={() => setPlayingTrailer(false)} className="flex items-center gap-1 text-xs text-ivory/70 hover:text-ivory">
+                        <X className="h-4 w-4" /> Close
+                      </button>
+                    </div>
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${hero.content.trailer_key}?autoplay=1`}
+                      title={`${hero.content.title} trailer`}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="h-full w-full border-0"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-8 border-t border-ivory/10 p-6 sm:p-10 lg:grid-cols-[1.2fr_1fr]">
@@ -338,6 +360,14 @@ export default function MoodStudio({ onSelectTitle }: { onSelectTitle: (c: Canon
                 <button onClick={() => onSelectTitle(hero.content, hero.personal_match_percentage)} className="flex items-center gap-2 rounded-full bg-gel-500 px-6 py-3 text-sm font-semibold text-pit hover:bg-gel-400">
                   <Info className="h-4 w-4" /> Why should I watch this?
                 </button>
+                {hero.content.trailer_key && (
+                  <button
+                    onClick={() => setPlayingTrailer(true)}
+                    className="flex items-center gap-2 rounded-full border border-gel-400/60 bg-gel-500/10 px-5 py-3 text-sm font-semibold text-gel-300 hover:bg-gel-500/20"
+                  >
+                    <Play className="h-4 w-4 fill-current" /> Watch trailer
+                  </button>
+                )}
                 <button onClick={onLike} disabled={liked} className="flex items-center gap-2 rounded-full border border-ivory/20 px-5 py-3 text-sm text-ivory hover:border-gel-400 disabled:border-gel-400/50 disabled:text-gel-300">
                   <Heart className={`h-4 w-4 ${liked ? "fill-current" : ""}`} /> {liked ? "Counted for this mood" : "This fits tonight"}
                 </button>

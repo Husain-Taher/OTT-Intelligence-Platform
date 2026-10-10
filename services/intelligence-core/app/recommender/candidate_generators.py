@@ -49,6 +49,17 @@ class CandidateGenerator:
                 if any(g in item.genres for g in intent.target_genres):
                     candidates_map[item.content_id] = (item, {"semantic_score": 0.35, "source": "genre_match"})
 
+        # Retrieve candidates matching the requested mood
+        if intent.mood:
+            from app.recommender.ranker import MultiStageRanker
+            for item in all_items:
+                if item.content_id in seen_content_ids or item.content_id in candidates_map:
+                    continue
+                m_score = MultiStageRanker.compute_mood_score(item, intent.mood)
+                if m_score >= 0.5:
+                    candidates_map[item.content_id] = (item, {"semantic_score": m_score * 0.7, "source": "mood_match"})
+
+
         # 2. Taste-Based Retrieval (Only backfill if no explicit query text or as soft candidate addition)
         if not intent.query_text:
             for item in all_items:
