@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bookmark } from "lucide-react";
+import { Bookmark, Trash2, AlertTriangle } from "lucide-react";
 import { useMe } from "@/context/MeContext";
 import { useMood } from "@/context/MoodContext";
-import { fetchWatchlist } from "@/lib/api";
+import { fetchWatchlist, deleteMyData } from "@/lib/api";
 import { MOODS, MOOD_BY_ID, MoodId } from "@/lib/moods";
 import { CanonicalContent } from "@/types";
 
@@ -40,11 +40,30 @@ export default function ProfileView({
   const { me, loading, refresh } = useMe();
   const { setMood } = useMood();
   const [reel, setReel] = useState<CanonicalContent[]>([]);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     refresh();
     fetchWatchlist().then((r) => r && setReel(r.items));
   }, [refresh]);
+
+  const handleDeleteData = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await deleteMyData();
+      if (res) {
+        setReel([]);
+        await refresh();
+        setShowConfirm(false);
+      }
+    } catch (e) {
+      console.error("Failed to delete user data:", e);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
 
   if (loading || !me) {
     return <div className="py-24 text-center font-display text-lg italic text-ivory/50">Pulling your ticket stub…</div>;
@@ -224,6 +243,50 @@ export default function ProfileView({
             ))}
           </div>
         )}
+      </section>
+
+      {/* Data & Privacy: Clear history & taste */}
+      <section className="rounded-2xl border border-red-500/20 bg-velvet-deep/30 p-6 md:p-8">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="font-display text-xl text-ivory">Account History & Data</h2>
+            <p className="mt-1 text-sm text-ivory/55">
+              Reset your profile, delete your saved reel, reactions, and learned taste map.
+            </p>
+          </div>
+          {!showConfirm ? (
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-500/40 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete my data
+            </button>
+          ) : (
+            <div className="flex flex-col gap-3 rounded-xl border border-red-500/40 bg-pit/90 p-4 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2 text-xs text-red-300">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+                <span>Are you sure? This action cannot be undone.</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDeleteData}
+                  disabled={isDeleting}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-ivory transition hover:bg-red-500 disabled:opacity-50"
+                >
+                  {isDeleting ? "Deleting…" : "Confirm Delete"}
+                </button>
+                <button
+                  onClick={() => setShowConfirm(false)}
+                  disabled={isDeleting}
+                  className="rounded-lg border border-brass/30 px-3 py-1.5 text-xs text-ivory/70 transition hover:bg-surface hover:text-ivory"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );

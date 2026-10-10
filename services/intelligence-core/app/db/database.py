@@ -667,3 +667,22 @@ def get_all_pick_feedback() -> List[Dict[str, Any]]:
     conn.close()
     return [dict(r) for r in rows]
 
+
+def delete_user_data(user_id: str) -> None:
+    """Removes all data associated with a user: profile, taste, events, watchlist, checkins, mood affinity, feedback."""
+    conn = get_connection()
+    tables = [
+        "profiles",
+        "user_taste_profiles",
+        "user_events",
+        "user_watchlist",
+        "mood_checkins",
+        "user_mood_affinity",
+        "pick_feedback",
+    ]
+    for tbl in tables:
+        conn.execute(f"DELETE FROM {tbl} WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+

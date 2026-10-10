@@ -109,3 +109,7 @@ export async function recordUserEvent(
 export const submitPickFeedback = (mood: string, contentId: string, matched: number) =>
   post<{ status: string; id: number }>(`/feedback`, { mood, content_id: contentId, matched });
 
+export const deleteMyData = () =>
+  request<{ status: string }>(`/me`, { method: "DELETE" });
+
+

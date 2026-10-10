@@ -167,3 +167,35 @@ def test_pick_feedback_and_csv_export(client, monkeypatch):
     assert "mystery" in r_admin.text
 
 
+def test_delete_me(client):
+    h = H(make_token("auth0|to_delete_user"))
+    # Pick a real content_id from catalog
+    items = client.get("/v1/content", headers=h).json()
+    cid = items[0]["content_id"]
+
+    # Perform some actions to populate user tables
+    client.post("/v1/events", headers=h, json={"content_id": cid, "event_type": "LIKE", "metadata": {"mood": "comforting"}})
+    client.post("/v1/user/watchlist/toggle", headers=h, json={"content_id": cid, "mood": "comforting"})
+    client.post("/v1/feedback", headers=h, json={"mood": "comforting", "content_id": cid, "matched": 1})
+    client.post("/v1/me/onboarded", headers=h)
+
+    # Check that me profile exists and has reactions & saved
+    me = client.get("/v1/me", headers=h).json()
+    assert me["onboarded"] is True
+    assert me["stats"]["reactions"] >= 1
+    assert me["stats"]["saved"] >= 1
+
+    # Call DELETE /v1/me
+    del_res = client.delete("/v1/me", headers=h)
+    assert del_res.status_code == 200
+    assert del_res.json()["status"] == "deleted"
+
+    # Profile should now be reset to blank / new user
+    me_after = client.get("/v1/me", headers=h).json()
+    assert me_after["onboarded"] is False
+    assert me_after["stats"]["reactions"] == 0
+    assert me_after["stats"]["saved"] == 0
+
+
+
+

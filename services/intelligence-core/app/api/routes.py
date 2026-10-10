@@ -14,7 +14,8 @@ from app.db.database import (
     save_user_taste, log_user_event, get_user_events,
     get_profile_row, update_profile, log_mood_checkin, get_recent_checkins,
     get_checkin_counts, add_mood_affinity, get_mood_affinity, mood_genre_overlay,
-    get_user_activity_stats, get_watchlist, save_pick_feedback, get_all_pick_feedback
+    get_user_activity_stats, get_watchlist, save_pick_feedback, get_all_pick_feedback,
+    delete_user_data
 )
 from app.auth.auth0 import AuthUser, get_current_user
 from app.moods import MOODS, normalize_mood, catalog as mood_catalog
@@ -723,6 +724,13 @@ def get_me(user: AuthUser = Depends(get_current_user)):
 def finish_onboarding(user: AuthUser = Depends(get_current_user)):
     update_profile(user.user_id, onboarded=True)
     return {"status": "ok"}
+
+@router.delete("/me")
+def delete_me(user: AuthUser = Depends(get_current_user)):
+    """Removes the authenticated user's profile, events, mood map, and watchlist."""
+    delete_user_data(user.user_id)
+    return {"status": "deleted"}
+
 
 # --- MASTER ML TRAINING PIPELINE ROUTES ---
 @router.post("/ml/train-user")
