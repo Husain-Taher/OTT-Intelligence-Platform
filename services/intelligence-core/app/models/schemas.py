@@ -87,8 +87,10 @@ class ContentProfile(BaseModel):
 class CanonicalContent(BaseModel):
     content_id: str
     tmdb_id: int
+    imdb_id: Optional[str] = None
     title: str
     original_title: Optional[str] = None
+
     content_type: ContentType = ContentType.MOVIE
     release_date: Optional[str] = None
     release_year: Optional[int] = None

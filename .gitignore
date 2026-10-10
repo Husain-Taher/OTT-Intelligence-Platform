@@ -13,3 +13,5 @@ venv/
 .cache/
 .DS_Store
 Thumbs.db
+*.tsbuildinfo
+

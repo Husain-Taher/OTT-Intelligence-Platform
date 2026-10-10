@@ -87,7 +87,25 @@ class TMDBAdapter:
                 return []
             return [m["id"] for m in resp.json().get("results", [])]
 
+    async def find_by_imdb_id(self, imdb_id: str) -> Optional[int]:
+        """Looks up a TMDB movie id using an external IMDb ID (e.g. tt0111161)."""
+        url = f"{BASE_URL}/find/{imdb_id}"
+        params = {"api_key": self.api_key, "external_source": "imdb_id"}
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, params=params, headers=self.headers)
+            if resp.status_code != 200:
+                return None
+            results = resp.json().get("movie_results", [])
+            if results:
+                return results[0]["id"]
+            # Also check tv_results if applicable
+            tv_results = resp.json().get("tv_results", [])
+            if tv_results:
+                return tv_results[0]["id"]
+            return None
+
     def _parse_movie_payload(self, data: Dict[str, Any]) -> CanonicalContent:
+
         tmdb_id = data.get("id")
         title = data.get("title", "")
         original_title = data.get("original_title")
@@ -180,8 +198,10 @@ class TMDBAdapter:
         return CanonicalContent(
             content_id=f"movie_{tmdb_id}",
             tmdb_id=tmdb_id,
+            imdb_id=data.get("imdb_id"),
             title=title,
             original_title=original_title,
+
             content_type=ContentType.MOVIE,
             release_date=release_date,
             release_year=release_year,

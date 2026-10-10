@@ -49,11 +49,27 @@ def init_db():
     """)
 
     # Migrations for existing DB
-    for col in ["trailer_key", "cast_detail", "gallery_images", "story_card"]:
+    for col in ["trailer_key", "cast_detail", "gallery_images", "story_card", "imdb_id"]:
         try:
             cursor.execute(f"ALTER TABLE canonical_content ADD COLUMN {col} TEXT;")
         except Exception:
             pass
+
+    # Pre-computed mood scores table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS content_mood_scores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        content_id TEXT NOT NULL,
+        mood TEXT NOT NULL,
+        score REAL NOT NULL,
+        confidence REAL DEFAULT 1.0,
+        primary_cues TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(content_id, mood)
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_mood_score ON content_mood_scores(mood, score);")
+
 
     # Users authentication & accounts
     cursor.execute("""
@@ -198,6 +214,8 @@ def init_db():
 
     conn.commit()
     conn.close()
+    backfill_mood_scores()
+
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
@@ -728,8 +746,47 @@ def get_recent_shown_counts(user_id: str, limit: int = 50) -> Dict[str, int]:
         )
         GROUP BY content_id
     """, (user_id, limit)).fetchall()
+    return {r[0]: r[1] for r in rows}
+
+
+def save_mood_scores(content_id: str, mood_scores: Dict[str, float], cues: Optional[Dict[str, List[str]]] = None) -> None:
+    """Saves or updates precomputed mood scores (0.0 to 1.0) for a content item."""
+    if not mood_scores:
+        return
+    conn = get_connection()
+    cur = conn.cursor()
+    cues_dict = cues or {}
+    for mood, score in mood_scores.items():
+        cue_json = json.dumps(cues_dict.get(mood, []))
+        cur.execute("""
+            INSERT OR REPLACE INTO content_mood_scores (content_id, mood, score, confidence, primary_cues)
+            VALUES (?, ?, ?, 1.0, ?)
+        """, (content_id, mood.lower(), float(score), cue_json))
+    conn.commit()
+    conn.close()
+
+
+def get_mood_scores(content_id: str) -> Dict[str, float]:
+    """Retrieves all precomputed mood scores for a content item."""
+    conn = get_connection()
+    cur = conn.cursor()
+    rows = cur.execute("""
+        SELECT mood, score FROM content_mood_scores WHERE content_id = ?
+    """, (content_id,)).fetchall()
     conn.close()
     return {r[0]: r[1] for r in rows}
 
 
+def backfill_mood_scores() -> int:
+    """Computes and saves mood scores for any content items missing precomputed scores."""
+    from app.recommender.ranker import MultiStageRanker
+    conn = get_connection()
+    existing = set(r[0] for r in conn.execute("SELECT DISTINCT content_id FROM content_mood_scores").fetchall())
+    conn.close()
+    items = get_all_content()
+    unscored = [i for i in items if i.content_id not in existing]
+    for item in unscored:
+        scores = {m: round(MultiStageRanker.compute_mood_score(item, m), 3) for m in ["comforting", "emotional", "reflective", "mystery", "exciting", "romance", "strange"]}
+        save_mood_scores(item.content_id, scores)
+    return len(unscored)
 
