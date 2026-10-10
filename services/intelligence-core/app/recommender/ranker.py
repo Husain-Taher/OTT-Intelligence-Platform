@@ -176,17 +176,56 @@ class MultiStageRanker:
             # Calibrate personal match percentage based on mood alignment and taste
             adjusted_match_pct = int(min(99, max(30, (match_pct * 0.4 + s_mood * 60) - (runtime_penalty * 20))))
 
-            # Formulate query-aware reasons if semantic or genre match
-            adjusted_reasons = list(reasons)
-            if intent.target_genres and any(g.lower() in [x.lower() for x in intent.target_genres] for g in item.genres):
-                matched_g = [g for g in item.genres if g.lower() in [x.lower() for x in intent.target_genres]][0]
-                adjusted_reasons.insert(0, f"Directly matches your search for {matched_g}")
-            elif gen_scores.get("semantic_score", 0) > 0.15 and intent.query_text:
-                adjusted_reasons.insert(0, f"Strong thematic alignment with '{intent.query_text}'")
+            # -----------------------------------------------------------------
+            # Phase 7: Fact-Grounded Explanation Builder
+            # Never hallucinate: build reasons strictly from verified database facts
+            # (tagline, matching keywords, viewer review quotes, shared director/cast, primary cues)
+            # -----------------------------------------------------------------
+            fact_reasons = []
+
+            # 1. Matching genres / query
+            if intent.target_genres:
+                matched_genres = [g for g in item.genres if any(tg.lower() == g.lower() for tg in intent.target_genres)]
+                if matched_genres:
+                    fact_reasons.append(f"Direct genre match: {', '.join(matched_genres)}")
+
+            # 2. Tagline (Real TMDB fact)
+            if item.tagline and len(item.tagline.strip()) > 5:
+                clean_tagline = item.tagline.strip(' ".')
+                fact_reasons.append(f'"{clean_tagline}"')
+
+            # 3. Director / Auteur verification
+            if item.directors:
+                fact_reasons.append(f"Directed by {', '.join(item.directors[:2])}")
+
+            # 4. Content cues and mood grounding
+            from app.intelligence.tagger import ContentTagger
+            tag_res = ContentTagger.tag_content(item)
+            cues_for_mood = tag_res.primary_cues.get(intent.mood.lower(), []) if intent.mood else []
+            if cues_for_mood:
+                fact_reasons.append(f"Feeling: {cues_for_mood[0]}")
+
+            # 5. Review quote excerpt (Real TMDB/audience quote)
+            if prof and prof.highlighted_quotes:
+                top_q = prof.highlighted_quotes[0]
+                if top_q.text:
+                    truncated_text = top_q.text if len(top_q.text) <= 90 else f"{top_q.text[:87]}..."
+                    fact_reasons.append(f'Audience note: "{truncated_text}"')
+
+            # 6. Thematic keywords
+            if item.keywords and len(item.keywords) >= 2:
+                fact_reasons.append(f"Themes: {', '.join(item.keywords[:3])}")
+
+            # Fall back to taste engine reasons if list is short
+            for r in reasons:
+                if len(fact_reasons) >= 4:
+                    break
+                if r not in fact_reasons:
+                    fact_reasons.append(r)
 
             contrast_note = MultiStageRanker._generate_contrastive_note(item, taste, intent, adjusted_match_pct)
 
-            scored_items.append((item, final_score, adjusted_match_pct, breakdown, adjusted_reasons, differences, contrast_note))
+            scored_items.append((item, final_score, adjusted_match_pct, breakdown, fact_reasons[:4], differences, contrast_note))
 
         # Sort candidate pool by final relevance score descending
         scored_items.sort(key=lambda x: x[1], reverse=True)

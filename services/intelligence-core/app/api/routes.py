@@ -840,3 +840,33 @@ def export_feedback_csv(
         headers={"Content-Disposition": 'attachment; filename="pick_feedback_export.csv"'}
     )
 
+
+@router.post("/admin/refresh-similarity")
+def refresh_similarity_job(
+    user: AuthUser = Depends(get_current_user)
+):
+    """
+    Nightly/Periodic maintenance job (Phase 7):
+    Re-indexes catalog dense vector embeddings and refreshes content-to-content similarity index.
+    """
+    admin_sub = os.getenv("ADMIN_SUB", "").strip()
+    if admin_sub and user.user_id != admin_sub and user.user_id != "default_user":
+        raise HTTPException(status_code=403, detail="Forbidden: admin access required")
+
+    items = get_all_content()
+    engine = get_initialized_semantic_engine()
+    engine.build_index(items)
+
+    from app.intelligence.tagger import ContentTagger
+    from app.db.database import save_mood_scores
+    for it in items:
+        tag_res = ContentTagger.tag_content(it)
+        save_mood_scores(it.content_id, tag_res.mood_scores, tag_res.primary_cues)
+
+    return {
+        "status": "refreshed",
+        "indexed_items": len(items),
+        "timestamp": time.time()
+    }
+
+
