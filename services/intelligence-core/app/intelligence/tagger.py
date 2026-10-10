@@ -46,7 +46,8 @@ SURREAL_KEYWORDS = [
     "surreal", "bizarre", "weird", "mind-bending", "multiverse", "time travel", "dream",
     "hallucination", "supernatural", "unreal", "alien", "simulation", "dystopian", "paradox",
     "alternate reality", "uncanny", "psychedelic", "nightmarish", "absurd", "eccentric",
-    "existential dread", "parallel universe"
+    "existential dread", "parallel universe", "cursed", "demon", "evil spirit", "other dimension",
+    "possession", "mythology", "zombie", "infection", "biological weapon"
 ]
 
 
@@ -323,6 +324,10 @@ class ContentTagger:
         if prof and prof.character_driven > 0.65:
             em_score += 0.15
 
+        # Extreme kinetic intensity / action thriller dampener for pure emotional drama
+        if intensity > 0.75:
+            em_score -= (intensity - 0.75) * 1.2
+
         mood_scores["emotional"] = max(0.0, min(1.0, round(em_score, 3)))
         primary_cues["emotional"] = em_cues[:4]
 
@@ -331,7 +336,7 @@ class ContentTagger:
         # -------------------------------------------------------------------------
         r_cues = []
         phil_depth = prof.philosophical_depth if prof else 0.4
-        r_score = 0.15 + (phil_depth * 0.45)
+        r_score = 0.05 + (phil_depth * 0.50)
         if phil_depth > 0.6:
             r_cues.append(f"Philosophical Depth ({int(phil_depth*100)}%)")
 
@@ -344,11 +349,22 @@ class ContentTagger:
             r_score += wonder_val * 0.15
             r_cues.append("Existential Wonder")
 
-        if any(g in genres_lower for g in ["science fiction", "drama", "documentary"]):
+        if any(g in genres_lower for g in ["science fiction", "documentary"]):
             r_score += 0.15
-        if pace < 0.45:
+        elif "drama" in genres_lower and phil_depth > 0.60:
             r_score += 0.10
+
+        if pace < 0.45:
+            r_score += 0.15
             r_cues.append("Deliberate Meditative Pace")
+
+        # Romantic comedies / lighthearted romance are not primary philosophical reflections
+        if "romance" in genres_lower and "comedy" in genres_lower and phil_depth < 0.70:
+            r_score -= 0.35
+
+        # Kinetic / explosive action penalty for Reflective
+        if intensity > 0.70:
+            r_score -= (intensity - 0.70) * 1.5
 
         mood_scores["reflective"] = max(0.0, min(1.0, round(r_score, 3)))
         primary_cues["reflective"] = r_cues[:4]
@@ -407,23 +423,27 @@ class ContentTagger:
         # 7. STRANGE (Surreal, weird, bizarre, uncanny, mind-bending)
         # -------------------------------------------------------------------------
         s_cues = []
-        s_score = 0.15
+        s_score = 0.05
         complexity = prof.narrative_complexity if prof else 0.5
         if complexity > 0.65:
-            s_score += (complexity - 0.4) * 0.4
+            s_score += (complexity - 0.4) * 0.45
             s_cues.append(f"Non-linear Complexity ({int(complexity*100)}%)")
 
         surreal_cnt = cls._count_keyword_matches(full_text, SURREAL_KEYWORDS)
         if surreal_cnt > 0:
-            s_score += min(0.45, surreal_cnt * 0.14)
+            s_score += min(0.50, surreal_cnt * 0.16)
             s_cues.append("Bizarre / Surreal Themes")
 
         if any(g in genres_lower for g in ["fantasy", "horror", "science fiction"]):
-            s_score += 0.20
+            s_score += 0.15
 
         if darkness > 0.55 and complexity > 0.55:
             s_score += 0.15
             s_cues.append("Dark Uncanny Atmosphere")
+
+        # Straightforward comedy without surreal keywords is not 'Strange'
+        if "comedy" in genres_lower and surreal_cnt == 0:
+            s_score -= 0.35
 
         mood_scores["strange"] = max(0.0, min(1.0, round(s_score, 3)))
         primary_cues["strange"] = s_cues[:4]

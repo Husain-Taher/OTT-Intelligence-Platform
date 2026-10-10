@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Set
+from typing import List, Tuple, Dict, Set, Optional
 from app.models.schemas import CanonicalContent, UserTasteVector, RecommendationIntent, RecommendationItem
 from app.intelligence.taste_engine import TasteEngine
 
@@ -188,40 +188,109 @@ class MultiStageRanker:
 
             scored_items.append((item, final_score, adjusted_match_pct, breakdown, adjusted_reasons, differences, contrast_note))
 
-        # Sort by final score descending
+        # Sort candidate pool by final relevance score descending
         scored_items.sort(key=lambda x: x[1], reverse=True)
 
-        # 8. Diversity Penalty (Maximal Marginal Relevance & Director/Franchise Cap)
+        # ---------------------------------------------------------------------
+        # 8. Maximal Marginal Relevance (MMR) & Strict Director/Franchise Cap
+        # MRR Formula: argmax_d [ lambda * Relevance(d) - (1 - lambda) * max_{s in S} Sim(d, s) ]
+        # ---------------------------------------------------------------------
+        from app.db.database import get_all_embeddings
+        import numpy as np
+        emb_map = get_all_embeddings()
+
+        def extract_franchise(title: str) -> str:
+            t = title.strip()
+            if ":" in t:
+                return t.split(":")[0].strip().lower()
+            lower = t.lower()
+            for kw in ["spider-man", "batman", "avatar", "dune", "knives out", "toy story", "avengers", "mission: impossible"]:
+                if kw in lower:
+                    return kw
+            return ""
+
+        def get_item_vec(content_id: str) -> Optional[np.ndarray]:
+            if content_id in emb_map and len(emb_map[content_id]) > 0:
+                v = np.array(emb_map[content_id], dtype=np.float32)
+                norm = np.linalg.norm(v)
+                return (v / norm) if norm > 0 else v
+            return None
+
         selected: List[Tuple[CanonicalContent, float, int, Dict[str, float], List[str], List[str], str]] = []
-        seen_genres: Dict[str, int] = {}
-        seen_countries: Dict[str, int] = {}
-        seen_directors: Dict[str, int] = {}
+        selected_vectors: List[np.ndarray] = []
+        selected_directors: Set[str] = set()
+        selected_franchises: Set[str] = set()
+        remaining = list(scored_items)
 
-        for entry in scored_items:
-            item = entry[0]
-            score = entry[1]
+        # MMR balance parameter (lambda = 0.65 balances mood/quality relevance with distinctness)
+        mmr_lambda = 0.65
 
-            primary_genre = item.genres[0] if item.genres else "Unknown"
-            primary_country = item.origin_countries[0] if item.origin_countries else "Unknown"
+        while remaining and len(selected) < top_n:
+            best_idx = -1
+            best_mmr_score = -999.0
 
-            genre_count = seen_genres.get(primary_genre, 0)
-            country_count = seen_countries.get(primary_country, 0)
-            director_count = sum(seen_directors.get(d, 0) for d in item.directors)
+            for idx, entry in enumerate(remaining):
+                cand_item = entry[0]
+                cand_rel = entry[1]
 
-            # Heavy penalty if already multiple titles of exact same genre, country or director
-            penalty = (genre_count * 0.08) + (country_count * 0.06) + (director_count * 0.14)
-            adjusted_score = score - penalty
+                # Hard Cap 1: Max 1 film per director per recommended set
+                if any(d in selected_directors for d in cand_item.directors):
+                    continue
 
-            selected.append((entry[0], round(adjusted_score, 3), entry[2], entry[3], entry[4], entry[5], entry[6]))
-            seen_genres[primary_genre] = genre_count + 1
-            seen_countries[primary_country] = country_count + 1
-            for d in item.directors:
-                seen_directors[d] = seen_directors.get(d, 0) + 1
+                # Hard Cap 2: Max 1 film per franchise / universe per recommended set
+                f_name = extract_franchise(cand_item.title)
+                if f_name and f_name in selected_franchises:
+                    continue
 
-            if len(selected) >= top_n:
-                break
+                # Compute maximum similarity to any already selected item
+                cand_vec = get_item_vec(cand_item.content_id)
+                if selected_vectors and cand_vec is not None:
+                    max_sim = max(float(np.dot(cand_vec, s_vec)) for s_vec in selected_vectors)
+                else:
+                    max_sim = 0.0
 
-        selected.sort(key=lambda x: x[1], reverse=True)
+                mmr_val = (mmr_lambda * cand_rel) - ((1.0 - mmr_lambda) * max_sim)
+
+                if mmr_val > best_mmr_score:
+                    best_mmr_score = mmr_val
+                    best_idx = idx
+
+            # If no remaining candidate passed the hard caps (e.g. director overlap), relax caps to fill slots
+            if best_idx == -1:
+                # Pick the highest relevance score from remaining without hard blocking
+                for idx, entry in enumerate(remaining):
+                    cand_item = entry[0]
+                    cand_rel = entry[1]
+                    cand_vec = get_item_vec(cand_item.content_id)
+                    max_sim = max((float(np.dot(cand_vec, s_vec)) for s_vec in selected_vectors), default=0.0)
+                    mmr_val = (mmr_lambda * cand_rel) - ((1.0 - mmr_lambda) * max_sim)
+                    if mmr_val > best_mmr_score:
+                        best_mmr_score = mmr_val
+                        best_idx = idx
+
+            chosen_entry = remaining.pop(best_idx)
+            chosen_item = chosen_entry[0]
+            chosen_rel = chosen_entry[1]
+            chosen_vec = get_item_vec(chosen_item.content_id)
+
+            selected.append((
+                chosen_item,
+                round(chosen_rel, 3),
+                chosen_entry[2],
+                chosen_entry[3],
+                chosen_entry[4],
+                chosen_entry[5],
+                chosen_entry[6]
+            ))
+
+            if chosen_vec is not None:
+                selected_vectors.append(chosen_vec)
+            for d in chosen_item.directors:
+                selected_directors.add(d)
+            f_cand = extract_franchise(chosen_item.title)
+            if f_cand:
+                selected_franchises.add(f_cand)
+
         return selected
 
     @staticmethod
