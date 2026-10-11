@@ -68,10 +68,23 @@ export default function DiscoveryHomeView({ onSelectTitle, onOpenStudio }: Props
         )}
       </section>
 
-      {loading || !deck || !hero ? (
+      {loading ? (
         <div className="space-y-6" aria-busy="true">
           <div className="aspect-[21/9] animate-pulse rounded-3xl bg-surface" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="aspect-[4/3] animate-pulse rounded-lg bg-surface" />)}</div>
+        </div>
+      ) : !deck || !hero ? (
+        <div className="rounded-2xl border border-brass/25 bg-surface p-8 text-center space-y-4 shadow-xl">
+          <p className="font-display text-xl text-ivory">Connecting to the Cinema Intelligence Core…</p>
+          <p className="text-xs text-ivory/60 max-w-md mx-auto leading-relaxed">
+            If your Render backend was sleeping on the free tier, it takes ~45 seconds to spin up. Please ensure <code className="text-gel-300">OTT_API_URL</code> on Vercel points to your live Render service URL.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-gel-500 px-6 py-2.5 text-xs font-semibold text-pit hover:bg-gel-400 transition"
+          >
+            Retry Connection
+          </button>
         </div>
       ) : (
         <>

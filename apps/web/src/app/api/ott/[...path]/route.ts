@@ -40,8 +40,12 @@ async function proxy(req: NextRequest, { params }: { params: { path: string[] } 
       status: upstream.status,
       headers: { "Content-Type": upstream.headers.get("content-type") || "application/json" },
     });
-  } catch {
-    return NextResponse.json({ detail: "The recommendation service is not reachable." }, { status: 502 });
+  } catch (err: any) {
+    console.error(`[OTT Proxy Error] Failed to fetch ${url}:`, err);
+    return NextResponse.json({ 
+      detail: `The recommendation service is not reachable (${API}). Error: ${err?.message || err}`,
+      target_url: url
+    }, { status: 502 });
   }
 }
 
