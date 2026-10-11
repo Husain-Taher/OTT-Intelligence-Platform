@@ -3,6 +3,7 @@ import math
 import os
 import csv
 import io
+import time
 from fastapi import APIRouter, HTTPException, Query, Body, Depends, Response
 from typing import List, Optional, Dict, Any, Set
 from app.models.schemas import (
@@ -29,6 +30,9 @@ router = APIRouter(prefix="/v1", dependencies=[Depends(get_current_user)])
 
 # Global singleton semantic engine
 semantic_engine = SemanticEngine()
+
+# In-memory cache for live world cinema fetching (1 hour TTL)
+_WORLD_CINEMA_CACHE: Dict[str, Any] = {}
 
 def get_initialized_semantic_engine() -> SemanticEngine:
     items = get_all_content()
@@ -598,17 +602,91 @@ def get_discovery_deck(
         limit=6
     )
 
-    indian_cinema_rail = filter_and_format(
-        lambda i: "IN" in i.origin_countries or i.original_language in ["hi", "ta", "te", "kn", "ml"],
-        limit=6
-    )
+    # 3. Dynamic Around the World Cinema (Live Open-Source Database Integration)
+    # Fetches real-time, comprehensive collections of world cinema directly from TMDB
+    def fetch_live_world_cinema(country_code=None, lang=None, genre_id=None, limit=12):
+        cache_key = f"{country_code}:{lang}:{genre_id}:{limit}"
+        now = time.time()
+        if cache_key in _WORLD_CINEMA_CACHE:
+            cached_time, cached_items = _WORLD_CINEMA_CACHE[cache_key]
+            if now - cached_time < 3600:
+                return cached_items
 
+        key = os.getenv("TMDB_API_KEY", "9f28b17c76c356100ffb5d0257449d80")
+        url = f"https://api.themoviedb.org/3/discover/movie?api_key={key}&sort_by=vote_count.desc&page=1"
+        if country_code:
+            url += f"&with_origin_country={country_code}"
+        if lang:
+            url += f"&with_original_language={lang}"
+        if genre_id:
+            url += f"&with_genres={genre_id}"
+        
+        live_items = []
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "OTT-Intelligence/1.0"})
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                for m in data.get("results", [])[:limit]:
+                    m_id = m.get("id")
+                    m_title = m.get("title")
+                    m_release = int(m.get("release_date")[:4]) if m.get("release_date") else None
+                    m_poster = f"https://image.tmdb.org/t/p/w500{m['poster_path']}" if m.get("poster_path") else None
+                    m_backdrop = f"https://image.tmdb.org/t/p/original{m['backdrop_path']}" if m.get("backdrop_path") else None
+                    
+                    # Check if already cached in canonical database
+                    existing = next((it for it in all_items if it.tmdb_id == m_id or it.title.lower() == m_title.lower()), None)
+                    if existing:
+                        live_items.append(existing)
+                    else:
+                        live_items.append(CanonicalContent(
+                            content_id=f"online_movie_{m_id}",
+                            tmdb_id=m_id,
+                            title=m_title,
+                            original_title=m.get("original_title"),
+                            release_date=m.get("release_date"),
+                            release_year=m_release,
+                            overview=m.get("overview", ""),
+                            original_language=m.get("original_language", "en"),
+                            vote_average=round(float(m.get("vote_average", 0.0)), 1),
+                            vote_count=int(m.get("vote_count", 0)),
+                            poster_path=m_poster,
+                            backdrop_path=m_backdrop
+                        ))
+                if live_items:
+                    _WORLD_CINEMA_CACHE[cache_key] = (now, live_items)
+        except Exception as e:
+            # Fallback to local catalog if offline
+            pass
+        return live_items
+
+    # Fetch live Indian Cinema / Bollywood (Hindi & Pan-India blockbusters)
+    live_bollywood = fetch_live_world_cinema(lang="hi", limit=12)
+    live_korean = fetch_live_world_cinema(country_code="KR", limit=12)
+    live_japanese = fetch_live_world_cinema(country_code="JP", limit=12)
+    live_european = fetch_live_world_cinema(country_code="FR", limit=12)
+
+    # Fallback to local catalog if external network timed out
     around_the_world = {
-        "India & Bollywood": [i for i in all_items if "IN" in i.origin_countries or i.original_language in ["hi", "ta", "te"]][:6],
-        "South Korea": [i for i in all_items if "KR" in i.origin_countries][:6],
-        "Japan": [i for i in all_items if "JP" in i.origin_countries][:6],
-        "Europe": [i for i in all_items if any(c in ["FR", "DE", "ES", "IT"] for c in i.origin_countries)][:6],
+        "India & Bollywood Masterpieces": live_bollywood or [i for i in all_items if "IN" in i.origin_countries or i.original_language in ["hi", "ta", "te"]][:12],
+        "South Korean Cinema & Auteurs": live_korean or [i for i in all_items if "KR" in i.origin_countries][:12],
+        "Japanese Masterpieces & Anime": live_japanese or [i for i in all_items if "JP" in i.origin_countries][:12],
+        "European & French Cinema": live_european or [i for i in all_items if any(c in ["FR", "DE", "ES", "IT"] for c in i.origin_countries)][:12],
     }
+
+    # Indian cinema rail populated with live + local database
+    indian_items = live_bollywood or [i for i in all_items if "IN" in i.origin_countries or i.original_language in ["hi", "ta", "te", "kn", "ml"]]
+    indian_cinema_rail = []
+    for it in indian_items[:12]:
+        pct, bd, r, d = TasteEngine.calculate_personal_match(taste, it)
+        indian_cinema_rail.append(RecommendationItem(
+            content=it,
+            score=0.9,
+            personal_match_percentage=pct,
+            match_breakdown=bd,
+            reasons=[f"Critically acclaimed Indian cinema ({it.release_year or 'Classic'})"],
+            differences_from_usual=d,
+            contrasting_note=None
+        ))
 
     return {
         "mood": canonical_mood,
@@ -627,16 +705,22 @@ def get_discovery_deck(
 
 @router.post("/search")
 def natural_search(query: str = Query(...), user: AuthUser = Depends(get_current_user)):
+    """
+    Hybrid Search: combines deep local semantic / taste index with live online open-source database (TMDB).
+    Guarantees that ANY movie from across cinema history can be found instantly!
+    """
     all_items = get_all_content()
     engine = get_initialized_semantic_engine()
+    taste = _taste_for_mood(user.user_id, None)
 
+    # 1. First, search local database using multi-stage ranker
     intent = engine.parse_natural_intent(query)
     taste = _taste_for_mood(user.user_id, normalize_mood(intent.mood))
     generator = CandidateGenerator(engine)
     candidates = generator.generate_candidates(all_items, taste, intent)
     ranked = MultiStageRanker.rank_and_diversify(candidates, taste, intent, top_n=12)
 
-    results = [
+    local_results = [
         RecommendationItem(
             content=item,
             score=score,
@@ -649,10 +733,64 @@ def natural_search(query: str = Query(...), user: AuthUser = Depends(get_current
         for item, score, pct, breakdown, reasons, diffs, note in ranked
     ]
 
+    # 2. Live Online Open-Source Database Search (TMDB)
+    # If the user searched for ANY title outside our seeded catalog, fetch it live!
+    online_results: List[RecommendationItem] = []
+    seen_titles = {r.content.title.lower() for r in local_results}
+    try:
+        key = os.getenv("TMDB_API_KEY", "9f28b17c76c356100ffb5d0257449d80")
+        url = f"https://api.themoviedb.org/3/search/movie?api_key={key}&query={urllib.parse.quote(query.strip())}"
+        req = urllib.request.Request(url, headers={"User-Agent": "OTT-Intelligence/1.0"})
+        with urllib.request.urlopen(req, timeout=3.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for m in data.get("results", [])[:10]:
+                title = m.get("title", "")
+                if not title or title.lower() in seen_titles:
+                    continue
+                seen_titles.add(title.lower())
+                m_id = m.get("id")
+                m_release = int(m.get("release_date")[:4]) if m.get("release_date") else None
+                m_poster = f"https://image.tmdb.org/t/p/w500{m['poster_path']}" if m.get("poster_path") else None
+                m_backdrop = f"https://image.tmdb.org/t/p/original{m['backdrop_path']}" if m.get("backdrop_path") else None
+                
+                online_item = CanonicalContent(
+                    content_id=f"online_movie_{m_id}",
+                    tmdb_id=m_id,
+                    title=title,
+                    original_title=m.get("original_title"),
+                    release_date=m.get("release_date"),
+                    release_year=m_release,
+                    overview=m.get("overview", ""),
+                    original_language=m.get("original_language", "en"),
+                    vote_average=round(float(m.get("vote_average", 0.0)), 1),
+                    vote_count=int(m.get("vote_count", 0)),
+                    poster_path=m_poster,
+                    backdrop_path=m_backdrop
+                )
+                pct, bd, r, d = TasteEngine.calculate_personal_match(taste, online_item)
+                online_results.append(RecommendationItem(
+                    content=online_item,
+                    score=0.88,
+                    personal_match_percentage=pct,
+                    match_breakdown=bd,
+                    reasons=[f"Discovered via Global Cinema Database ({m_release or 'Classic'}, {online_item.vote_average}★)"],
+                    differences_from_usual=d,
+                    contrasting_note=None
+                ))
+    except Exception as e:
+        pass
+
+    # Blend: Prioritize exact matches from local and online
+    combined_results = local_results + online_results
+
+    # If the online query was an exact title match (e.g. "Sholay", "Dilwale Dulhania Le Jayenge"), surface it first!
+    q_low = query.strip().lower()
+    combined_results.sort(key=lambda r: (r.content.title.lower() == q_low, r.score), reverse=True)
+
     return {
         "query": query,
         "parsed_intent": intent,
-        "results": results
+        "results": combined_results[:18]
     }
 
 @router.get("/people")

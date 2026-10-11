@@ -36,15 +36,15 @@ export default function MovieCard({ item, onSelect }: MovieCardProps) {
         )}
       </div>
 
-      <div className="flex flex-1 flex-col justify-between p-4">
+      <div className="flex flex-1 flex-col justify-between p-4 sm:p-5">
         <div>
-          <div className="flex items-baseline justify-between gap-2">
-            <h3 className="line-clamp-1 font-display text-lg font-medium text-ivory transition-colors group-hover:text-gel-300">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 font-display text-base sm:text-lg font-semibold leading-snug text-ivory transition-colors group-hover:text-gel-300">
               {content.title}
             </h3>
-            {content.release_year && <span className="shrink-0 text-xs text-ivory/45">{content.release_year}</span>}
+            {content.release_year && <span className="shrink-0 text-xs font-medium text-ivory/50 mt-0.5">{content.release_year}</span>}
           </div>
-          {reason && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ivory/55">{reason}</p>}
+          {reason && <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-ivory/60">{reason}</p>}
         </div>
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-ivory/[0.07] pt-3 text-xs text-ivory/55">
           <span className="flex gap-3">
