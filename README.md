@@ -14,7 +14,6 @@
 
 ## 🌐 Live Application
 - **Production Web Application:** [https://ott-intelligence-web.vercel.app](https://ott-intelligence-web.vercel.app)
-- **API Documentation & OpenAPI:** [https://ott-intelligence-core.onrender.com/docs](https://ott-intelligence-core.onrender.com/docs)
 
 ---
 
