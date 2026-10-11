@@ -62,7 +62,7 @@ ALIASES = {
 
 def normalize_mood(value: Optional[str]) -> Optional[str]:
     """Maps free text / aliases to a canonical mood id, or None if unknown."""
-    if not value:
+    if not value or not isinstance(value, str):
         return None
     v = value.strip().lower()
     if v in MOODS:

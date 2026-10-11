@@ -36,6 +36,10 @@ async function proxy(req: NextRequest, { params }: { params: { path: string[] } 
       body: hasBody ? await req.text() : undefined,
       cache: "no-store",
     });
+    if (!upstream.ok) {
+      const errText = await upstream.clone().text().catch(() => "");
+      console.warn(`[OTT Proxy Upstream ${upstream.status}] ${url}:`, errText.slice(0, 300));
+    }
     return new NextResponse(upstream.body, {
       status: upstream.status,
       headers: { "Content-Type": upstream.headers.get("content-type") || "application/json" },
