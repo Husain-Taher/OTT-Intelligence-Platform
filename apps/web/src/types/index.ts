@@ -158,6 +158,13 @@ export interface DiscoveryDeck {
   mood: string | null;
   hero: RecommendationItem;
   tonight_picks: RecommendationItem[];
+  all_time_greats?: RecommendationItem[];
+  franchise_spotlight?: {
+    franchise_name: string;
+    tagline: string;
+    titles: RecommendationItem[];
+  };
+  trending_now?: RecommendationItem[];
   unexpected_discoveries: RecommendationItem[];
   comfort_rail: RecommendationItem[];
   adrenaline_rail: RecommendationItem[];

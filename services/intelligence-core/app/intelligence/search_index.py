@@ -146,28 +146,44 @@ class TypoTolerantSearchIndex:
 
             # Check Directors
             for dir_name, raw_d in zip(directors_norm, item.directors):
-                if q_norm in dir_name or any(t in dir_name.split() for t in q_tokens):
-                    score = 0.85 if q_norm == dir_name else 0.78
-                    if score > best_field_score:
-                        best_field_score = score
-                        best_reason = f"Directed by {raw_d}"
-                elif len(q_norm) >= 4:
-                    for dw in dir_name.split():
-                        if len(dw) >= 4 and damerau_levenshtein_distance(q_norm, dw) <= 1:
-                            if 0.72 > best_field_score:
-                                best_field_score = 0.72
+                d_tokens = dir_name.split()
+                if q_norm == dir_name:
+                    score = 0.95
+                elif q_norm in dir_name and len(q_norm) >= 6:
+                    score = 0.82
+                elif len(q_tokens) >= 2 and all(t in d_tokens for t in q_tokens):
+                    score = 0.88
+                else:
+                    score = 0.0
+
+                if score > best_field_score:
+                    best_field_score = score
+                    best_reason = f"Directed by {raw_d}"
+                elif len(q_norm) >= 5 and len(q_tokens) >= 2:
+                    for dw in d_tokens:
+                        if len(dw) >= 5 and damerau_levenshtein_distance(q_norm, dw) <= 1:
+                            if 0.70 > best_field_score:
+                                best_field_score = 0.70
                                 best_reason = f"Fuzzy director match: {raw_d}"
 
             # Check Cast
-            for cast_name, raw_c in zip(cast_norm[:6], item.cast[:6]):
-                if q_norm in cast_name or any(t in cast_name.split() for t in q_tokens):
-                    score = 0.80 if q_norm == cast_name else 0.72
-                    if score > best_field_score:
-                        best_field_score = score
-                        best_reason = f"Starring {raw_c}"
-                elif len(q_norm) >= 4:
-                    for cw in cast_name.split():
-                        if len(cw) >= 4 and damerau_levenshtein_distance(q_norm, cw) <= 1:
+            for cast_name, raw_c in zip(cast_norm[:8], item.cast[:8]):
+                c_tokens = cast_name.split()
+                if q_norm == cast_name:
+                    score = 0.92
+                elif q_norm in cast_name and len(q_norm) >= 6:
+                    score = 0.80
+                elif len(q_tokens) >= 2 and all(t in c_tokens for t in q_tokens):
+                    score = 0.85
+                else:
+                    score = 0.0
+
+                if score > best_field_score:
+                    best_field_score = score
+                    best_reason = f"Starring {raw_c}"
+                elif len(q_norm) >= 5 and len(q_tokens) >= 2:
+                    for cw in c_tokens:
+                        if len(cw) >= 5 and damerau_levenshtein_distance(q_norm, cw) <= 1:
                             if 0.68 > best_field_score:
                                 best_field_score = 0.68
                                 best_reason = f"Fuzzy actor match: {raw_c}"

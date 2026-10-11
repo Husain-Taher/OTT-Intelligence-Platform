@@ -507,7 +507,7 @@ def get_discovery_deck(
     )
 
     # 2. Curated Thematic Rails
-    def filter_and_format(filter_fn, limit=4):
+    def filter_and_format(filter_fn, limit=6):
         items = [i for i in all_items if filter_fn(i) and i.content_id != hero.content.content_id][:limit]
         formatted = []
         for it in items:
@@ -523,24 +523,79 @@ def get_discovery_deck(
             ))
         return formatted
 
-    tonight_picks = [mp for mp in mood_picks if mp.content.content_id != hero.content.content_id][:5] if mood_picks else filter_and_format(
+    # All-Time Acclaimed Greats: high vote count + top rated (e.g. Interstellar, Shawshank, Dark Knight, Godfather)
+    # Bayesian popularity + rating ranker
+    def bayes_rating(it):
+        v = it.vote_count or 0
+        r = it.vote_average or 0.0
+        return (v / (v + 1000.0)) * r + (1000.0 / (v + 1000.0)) * 7.5
+
+    greats_sorted = sorted([i for i in all_items if (i.vote_count or 0) >= 12000 and i.content_id != hero.content.content_id], key=bayes_rating, reverse=True)
+    all_time_greats = []
+    for it in greats_sorted[:8]:
+        pct, bd, r, d = TasteEngine.calculate_personal_match(taste, it)
+        all_time_greats.append(RecommendationItem(
+            content=it,
+            score=0.95,
+            personal_match_percentage=pct,
+            match_breakdown=bd,
+            reasons=[f"Consensus Masterpiece ({it.vote_average}★, {it.vote_count:,} reviews)"],
+            differences_from_usual=d,
+            contrasting_note=None
+        ))
+
+    # Franchise Spotlight: spotlight beloved cinematic worlds (Harry Potter, LOTR, Dark Knight Trilogy)
+    hp_titles = [i for i in all_items if "harry potter" in i.title.lower()]
+    lotr_titles = [i for i in all_items if "lord of the rings" in i.title.lower()]
+    batman_titles = [i for i in all_items if "dark knight" in i.title.lower() or "batman" in i.title.lower()]
+
+    active_franchise_name = "The Wizarding World of Harry Potter"
+    active_franchise_tagline = "Hogwarts, spells, friendship, and the battle against darkness"
+    active_franchise_items = hp_titles if hp_titles else (lotr_titles or batman_titles)
+
+    franchise_items_formatted = []
+    for it in active_franchise_items[:6]:
+        pct, bd, r, d = TasteEngine.calculate_personal_match(taste, it)
+        franchise_items_formatted.append(RecommendationItem(
+            content=it,
+            score=0.92,
+            personal_match_percentage=pct,
+            match_breakdown=bd,
+            reasons=[f"Iconic franchise chapter: {it.release_year}"],
+            differences_from_usual=d,
+            contrasting_note=None
+        ))
+
+    franchise_spotlight = {
+        "franchise_name": active_franchise_name,
+        "tagline": active_franchise_tagline,
+        "titles": franchise_items_formatted
+    }
+
+    # Trending Now: high-energy contemporary cinematic spectacles
+    trending_now = filter_and_format(
+        lambda i: (i.release_year and i.release_year >= 2019 and (i.vote_count or 0) >= 3000),
+        limit=6
+    )
+
+    tonight_picks = [mp for mp in mood_picks if mp.content.content_id != hero.content.content_id][:6] if mood_picks else filter_and_format(
         lambda i: "Science Fiction" in i.genres or "Mystery" in i.genres or "Drama" in i.genres,
-        limit=5
+        limit=6
     )
 
     unexpected_discoveries = filter_and_format(
         lambda i: any(c in ["KR", "JP", "FR", "DE", "IN", "IT", "BR"] for c in i.origin_countries),
-        limit=4
+        limit=6
     )
 
     comfort_rail = filter_and_format(
         lambda i: any(g in i.genres for g in ["Comedy", "Animation", "Family"]) or (i.profile and i.profile.emotions.get("COMFORT", 0) > 0.4),
-        limit=4
+        limit=6
     )
 
     adrenaline_rail = filter_and_format(
         lambda i: "Action" in i.genres or "Adventure" in i.genres or (i.profile and i.profile.emotions.get("TENSION", 0) > 0.6),
-        limit=4
+        limit=6
     )
 
     indian_cinema_rail = filter_and_format(
@@ -550,15 +605,18 @@ def get_discovery_deck(
 
     around_the_world = {
         "India & Bollywood": [i for i in all_items if "IN" in i.origin_countries or i.original_language in ["hi", "ta", "te"]][:6],
-        "South Korea": [i for i in all_items if "KR" in i.origin_countries][:4],
-        "Japan": [i for i in all_items if "JP" in i.origin_countries][:4],
-        "Europe": [i for i in all_items if any(c in ["FR", "DE", "ES", "IT"] for c in i.origin_countries)][:4],
+        "South Korea": [i for i in all_items if "KR" in i.origin_countries][:6],
+        "Japan": [i for i in all_items if "JP" in i.origin_countries][:6],
+        "Europe": [i for i in all_items if any(c in ["FR", "DE", "ES", "IT"] for c in i.origin_countries)][:6],
     }
 
     return {
         "mood": canonical_mood,
         "hero": hero,
         "tonight_picks": tonight_picks,
+        "all_time_greats": all_time_greats,
+        "franchise_spotlight": franchise_spotlight,
+        "trending_now": trending_now,
         "unexpected_discoveries": unexpected_discoveries,
         "comfort_rail": comfort_rail,
         "adrenaline_rail": adrenaline_rail,

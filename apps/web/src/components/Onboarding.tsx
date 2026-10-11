@@ -26,16 +26,35 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     fetchCatalog().then((items) => {
       if (!items) return;
-      // One title per leading genre so the reel spans tastes; best rated first.
+      // Prioritize iconic, high-recognition titles with substantial reviews across diverse genres
+      const sortedByAcclaim = [...items]
+        .filter((i) => i.backdrop_path && (i.vote_count ?? 0) >= 3000)
+        .sort((a, b) => {
+          // Bayesian popularity score: (v/(v+1000))*r + (1000/(v+1000))*7.5
+          const scoreA = ((a.vote_count / (a.vote_count + 1000)) * a.vote_average) + ((1000 / (a.vote_count + 1000)) * 7.5);
+          const scoreB = ((b.vote_count / (b.vote_count + 1000)) * b.vote_average) + ((1000 / (b.vote_count + 1000)) * 7.5);
+          return scoreB - scoreA;
+        });
+
       const seen = new Set<string>();
       const picks: CanonicalContent[] = [];
-      for (const it of [...items].filter((i) => i.backdrop_path).sort((a, b) => b.vote_average - a.vote_average)) {
+      for (const it of sortedByAcclaim) {
         const g = it.genres[0] ?? "Other";
         if (!seen.has(g)) {
           seen.add(g);
           picks.push(it);
         }
         if (picks.length === REEL_SIZE) break;
+      }
+
+      // Fallback if catalog was smaller than REEL_SIZE
+      if (picks.length < REEL_SIZE) {
+        for (const it of sortedByAcclaim) {
+          if (!picks.some((p) => p.content_id === it.content_id)) {
+            picks.push(it);
+          }
+          if (picks.length === REEL_SIZE) break;
+        }
       }
       setReel(picks);
     });

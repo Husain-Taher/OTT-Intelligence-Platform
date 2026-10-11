@@ -140,21 +140,22 @@ class MultiStageRanker:
             # Synthesize Final Score per Phase 5 Specification:
             # Baseline targets: Mood (0.35), Taste (0.25), Quality (0.15), Collaborative (0.15), Novelty (0.10)
             if intent.query_text:
-                # Query-driven discovery: blend semantic NLP with mood and taste
-                w_mood = 0.25
-                w_taste = 0.15
-                w_quality = 0.15
-                w_collab = 0.10
+                # Query-driven discovery: users expect direct relevance to what they typed!
+                # If the item directly matched the search query (high semantic/keyword score), prioritize it over ambient mood
+                w_semantic = 0.55
+                w_quality = 0.20
+                w_taste = 0.10
+                w_collab = 0.05
                 w_novelty = 0.05
-                w_semantic = 0.30
+                w_mood = 0.05
 
                 raw_score = (
-                    (s_mood * w_mood) +
-                    (s_taste * w_taste) +
+                    (s_semantic * w_semantic) +
                     (s_quality * w_quality) +
+                    (s_taste * w_taste) +
                     (s_collab * w_collab) +
                     (s_novelty * w_novelty) +
-                    (s_semantic * w_semantic)
+                    (s_mood * w_mood)
                 ) - runtime_penalty - shown_penalty
             else:
                 w_mood = 0.35
@@ -239,13 +240,17 @@ class MultiStageRanker:
         emb_map = get_all_embeddings()
 
         def extract_franchise(title: str) -> str:
-            t = title.strip()
-            if ":" in t:
-                return t.split(":")[0].strip().lower()
-            lower = t.lower()
-            for kw in ["spider-man", "batman", "avatar", "dune", "knives out", "toy story", "avengers", "mission: impossible"]:
+            lower = title.strip().lower()
+            for kw in [
+                "harry potter", "lord of the rings", "godfather", "spider-man",
+                "batman", "avatar", "dune", "knives out", "toy story", "avengers",
+                "mission: impossible", "star wars", "jurassic", "fast & furious",
+                "john wick", "matrix", "hunger games", "shrek"
+            ]:
                 if kw in lower:
                     return kw
+            if ":" in title:
+                return title.split(":")[0].strip().lower()
             return ""
 
         def get_item_vec(content_id: str) -> Optional[np.ndarray]:
@@ -264,6 +269,9 @@ class MultiStageRanker:
         # MMR balance parameter (lambda = 0.65 balances mood/quality relevance with distinctness)
         mmr_lambda = 0.65
 
+        # If user explicitly searched for a specific franchise (e.g. "harry potter", "batman"), allow franchise sequels!
+        queried_franchise = extract_franchise(intent.query_text) if intent.query_text else ""
+
         while remaining and len(selected) < top_n:
             best_idx = -1
             best_mmr_score = -999.0
@@ -272,13 +280,13 @@ class MultiStageRanker:
                 cand_item = entry[0]
                 cand_rel = entry[1]
 
-                # Hard Cap 1: Max 1 film per director per recommended set
-                if any(d in selected_directors for d in cand_item.directors):
+                # Hard Cap 1: Max 1 film per director per recommended set (unless explicit query)
+                if not intent.query_text and any(d in selected_directors for d in cand_item.directors):
                     continue
 
-                # Hard Cap 2: Max 1 film per franchise / universe per recommended set
+                # Hard Cap 2: Max 1 film per franchise / universe per recommended set (unless querying that franchise)
                 f_name = extract_franchise(cand_item.title)
-                if f_name and f_name in selected_franchises:
+                if f_name and f_name in selected_franchises and f_name != queried_franchise:
                     continue
 
                 # Compute maximum similarity to any already selected item

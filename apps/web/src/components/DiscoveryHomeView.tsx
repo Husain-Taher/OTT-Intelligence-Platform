@@ -140,17 +140,48 @@ export default function DiscoveryHomeView({ onSelectTitle, onOpenStudio }: Props
             sub={theme ? theme.line : learning ? "A starting set while we learn your taste." : "Ranked by your taste so far."}
             items={deck.tonight_picks}
             onSelect={onSelectTitle}
-            cols="lg:grid-cols-5"
+            cols="lg:grid-cols-6"
           />
-          <Rail title="From further afield" sub="Great stories from outside the usual places." items={deck.unexpected_discoveries} onSelect={onSelectTitle} />
-          <Rail title="Easy watching" sub="Light on the nerves." items={deck.comfort_rail} onSelect={onSelectTitle} />
-          <Rail title="Fast and loud" sub="When you want momentum." items={deck.adrenaline_rail} onSelect={onSelectTitle} />
-          <Rail title="Indian cinema" items={deck.indian_cinema_rail} onSelect={onSelectTitle} cols="lg:grid-cols-3" />
+
+          {deck.all_time_greats && deck.all_time_greats.length > 0 && (
+            <Rail
+              title="All-Time Acclaimed Masterpieces"
+              sub="The gold standard of cinema: ranked by global critical consensus & millions of reviews."
+              items={deck.all_time_greats}
+              onSelect={onSelectTitle}
+              cols="lg:grid-cols-4"
+            />
+          )}
+
+          {deck.franchise_spotlight && deck.franchise_spotlight.titles.length > 0 && (
+            <Rail
+              title={deck.franchise_spotlight.franchise_name}
+              sub={deck.franchise_spotlight.tagline}
+              items={deck.franchise_spotlight.titles}
+              onSelect={onSelectTitle}
+              cols="lg:grid-cols-6"
+            />
+          )}
+
+          {deck.trending_now && deck.trending_now.length > 0 && (
+            <Rail
+              title="Modern Cultural Phenomenons"
+              sub="Spectacles and defining narratives from recent years."
+              items={deck.trending_now}
+              onSelect={onSelectTitle}
+              cols="lg:grid-cols-6"
+            />
+          )}
+
+          <Rail title="From further afield" sub="Great stories from outside the usual places." items={deck.unexpected_discoveries} onSelect={onSelectTitle} cols="lg:grid-cols-6" />
+          <Rail title="Easy watching" sub="Light on the nerves." items={deck.comfort_rail} onSelect={onSelectTitle} cols="lg:grid-cols-6" />
+          <Rail title="Fast and loud" sub="When you want momentum." items={deck.adrenaline_rail} onSelect={onSelectTitle} cols="lg:grid-cols-6" />
+          <Rail title="Indian cinema" sub="Blockbusters & masterpieces from the subcontinent." items={deck.indian_cinema_rail} onSelect={onSelectTitle} cols="lg:grid-cols-6" />
 
           {deck.around_the_world &&
             Object.entries(deck.around_the_world).map(([region, titles]) =>
               titles.length ? (
-                <Rail key={region} title={region} items={titles.map((c) => ({ content: c }) as any)} onSelect={onSelectTitle} />
+                <Rail key={region} title={region} items={titles.map((c) => ({ content: c }) as any)} onSelect={onSelectTitle} cols="lg:grid-cols-6" />
               ) : null
             )}
         </>
